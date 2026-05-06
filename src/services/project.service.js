@@ -1,0 +1,191 @@
+const Project   = require('../models/project.model');
+const Client    = require('../models/client.model');
+const Milestone = require('../models/milestone.model');
+const AppError  = require('../utils/AppError');
+const logger    = require('../config/logger');
+const { buildWorkspaceQuery, getPagination } = require('../utils/queryHelpers');
+const { markStepComplete } = require('./onboarding.service');
+
+// ─── State machine ────────────────────────────────────────────────────────────
+//
+// This defines every valid transition.
+// Any move not listed here is rejected with a 409.
+//
+// Read it like: "from state X, you may move to states Y and Z"
+//
+// Why these transitions specifically?
+//   draft → active:      Work begins. Client has been briefed.
+//   active → on_hold:    Work paused. Could be client decision or blocker.
+//   active → completed:  All deliverables done. Invoice can now be raised.
+//   on_hold → active:    Work resumes.
+//   on_hold → cancelled: Project won't proceed from paused state.
+//   completed → (none):  Terminal. You can't un-complete a project.
+//   cancelled → (none):  Terminal. You can't un-cancel a project.
+//
+// What you CANNOT do:
+//   draft → completed (must go through active)
+//   cancelled → active (can't resurrect a cancelled project — create a new one)
+//   completed → active (project is done — raise an invoice or start a new one)
+
+const VALID_TRANSITIONS = {
+  draft:     ['active'],
+  active:    ['on_hold', 'completed'],
+  on_hold:   ['active', 'cancelled'],
+  completed: [],
+  cancelled: []
+};
+
+// transitionProject mutates the project document and saves it.
+// It does NOT return the project — callers use the mutated object directly.
+const transitionProject = async (project, newStatus) => {
+  const allowed = VALID_TRANSITIONS[project.status];
+
+  if (!allowed.includes(newStatus)) {
+    throw new AppError(
+      409,
+      'INVALID_TRANSITION',
+      `Cannot transition project from "${project.status}" to "${newStatus}". ` +
+      `Allowed transitions: ${allowed.length ? allowed.join(', ') : 'none (terminal state)'}`
+    );
+  }
+
+  project.status = newStatus;
+  await project.save();
+
+  logger.info(
+    { projectId: project._id, from: project.status, to: newStatus },
+    'Project status transitioned'
+  );
+};
+
+// ─── List projects ────────────────────────────────────────────────────────────
+
+const listProjects = async (workspaceId, query) => {
+  const { skip, limit, page } = getPagination(query);
+
+  const filter = buildWorkspaceQuery({ isDeleted: false }, workspaceId);
+
+  if (query.status) {
+    // Allow filtering by multiple statuses: ?status=active,on_hold
+    const statuses = query.status.split(',').map(s => s.trim());
+    filter.status = { $in: statuses };
+  }
+
+  if (query.client) {
+    filter.client = query.client;
+  }
+
+  const [projects, total] = await Promise.all([
+    Project.find(filter)
+           .populate('client', 'name company email') // Attach client name to each project
+           .sort({ createdAt: -1 })
+           .skip(skip)
+           .limit(limit)
+           .lean(),
+    Project.countDocuments(filter)
+  ]);
+
+  return {
+    projects,
+    pagination: { page, limit, total, pages: Math.ceil(total / limit) }
+  };
+};
+
+// ─── Get single project ───────────────────────────────────────────────────────
+
+const getProject = async (projectId, workspaceId) => {
+  const project = await Project.findOne(
+    buildWorkspaceQuery({ _id: projectId, isDeleted: false }, workspaceId)
+  )
+  .populate('client', 'name company email gstin')
+  .populate({
+    path:    'milestones',
+    options: { sort: { order: 1 } } // Return milestones in display order
+  })
+  .lean();
+
+  if (!project) throw new AppError(404, 'PROJECT_NOT_FOUND', 'Project not found');
+  return project;
+};
+
+// ─── Create project ───────────────────────────────────────────────────────────
+
+const createProject = async (workspaceId, data, userId) => {
+  // Verify the client belongs to this workspace before linking
+  const client = await Client.findOne(
+    buildWorkspaceQuery({ _id: data.clientId, isArchived: false }, workspaceId)
+  );
+  if (!client) throw new AppError(404, 'CLIENT_NOT_FOUND', 'Client not found in this workspace');
+
+  const project = await Project.create({
+    workspace:   workspaceId,
+    client:      data.clientId,
+    title:       data.title,
+    description: data.description || null,
+    startDate:   data.startDate   || null,
+    endDate:     data.endDate     || null,
+    budget:      data.budget      || null,
+    tags:        data.tags        || [],
+  });
+
+  logger.info({ projectId: project._id, workspaceId }, 'Project created');
+  await markStepComplete(userId, 'create_project');
+  return project;
+};
+
+// ─── Update project ───────────────────────────────────────────────────────────
+
+const updateProject = async (projectId, workspaceId, updates) => {
+  const project = await Project.findOne(
+    buildWorkspaceQuery({ _id: projectId, isDeleted: false }, workspaceId)
+  );
+  if (!project) throw new AppError(404, 'PROJECT_NOT_FOUND', 'Project not found');
+
+  // Handle status transition separately via state machine
+  if (updates.status && updates.status !== project.status) {
+    await transitionProject(project, updates.status);
+  }
+
+  // Update non-status fields
+  const allowed = ['title', 'description', 'startDate', 'endDate', 'budget', 'tags', 'notifyClient'];
+  allowed.forEach(field => {
+    if (updates[field] !== undefined) project[field] = updates[field];
+  });
+
+  await project.save();
+
+  logger.info({ projectId, workspaceId }, 'Project updated');
+  return project;
+};
+
+// ─── Delete project (soft delete, draft only) ─────────────────────────────────
+
+const deleteProject = async (projectId, workspaceId) => {
+  const project = await Project.findOne(
+    buildWorkspaceQuery({ _id: projectId, isDeleted: false }, workspaceId)
+  );
+  if (!project) throw new AppError(404, 'PROJECT_NOT_FOUND', 'Project not found');
+
+  // Only draft projects can be deleted — active or completed projects
+  // have financial implications (invoices may exist)
+  if (project.status !== 'draft') {
+    throw new AppError(
+      409,
+      'PROJECT_NOT_DELETABLE',
+      `Only draft projects can be deleted. This project is "${project.status}". ` +
+      `Cancel it first, or archive the associated client.`
+    );
+  }
+
+  project.isDeleted = true;
+  project.deletedAt = new Date();
+  await project.save();
+
+  logger.info({ projectId, workspaceId }, 'Project soft-deleted');
+  return { message: 'Project deleted' };
+};
+
+module.exports = {
+  listProjects, getProject,
+  createProject, updateProject, deleteProject
+};
