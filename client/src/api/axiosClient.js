@@ -5,7 +5,6 @@ const axiosClient = axios.create({
   withCredentials: true,
 });
 
-// Attach access token to every request
 axiosClient.interceptors.request.use((config) => {
   const token = window.__postfolioAccessToken;
   if (token) config.headers.Authorization = `Bearer ${token}`;
@@ -20,7 +19,6 @@ const processQueue = (error, token = null) => {
   pendingQueue = [];
 };
 
-// Silent token refresh on 401
 axiosClient.interceptors.response.use(
   (response) => response,
   async (error) => {

@@ -3,7 +3,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { deliverablesApi } from '../api/endpoints/deliverables.api';
 import { projectKeys }     from './useProjects';
 
-// Encapsulates the full 3-step Cloudinary upload flow
 export const useUploadDeliverable = (milestoneId, projectId) => {
   const qc = useQueryClient();
   const [progress, setProgress] = useState(0);
@@ -16,11 +15,9 @@ export const useUploadDeliverable = (milestoneId, projectId) => {
     setError(null);
 
     try {
-      // Step 1: Get signature from server
       const sigRes    = await deliverablesApi.getSignature(milestoneId);
       const signParams = sigRes.data.data;
 
-      // Step 2: Upload to Cloudinary
       setProgress(10);
       const cloudResult = await deliverablesApi.uploadToCloudinary(
         file,
@@ -29,7 +26,6 @@ export const useUploadDeliverable = (milestoneId, projectId) => {
       );
       setProgress(90);
 
-      // Step 3: Register in DB
       const mimeType = cloudResult.resource_type === 'image'
         ? `image/${cloudResult.format}`
         : cloudResult.resource_type === 'video'

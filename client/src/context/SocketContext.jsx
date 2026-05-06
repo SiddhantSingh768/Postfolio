@@ -9,8 +9,6 @@ export const SocketProvider = ({ children }) => {
   const socketRef  = useRef(null);
   const [connected, setConnected] = useState(false);
 
-// In SocketContext.jsx — update the useEffect dependencies
-// to reconnect when the token changes after refresh
 
 useEffect(() => {
   if (!isAuthenticated || !token) {
@@ -22,10 +20,8 @@ useEffect(() => {
     return;
   }
 
-  // If socket exists with same token, don't reconnect
   if (socketRef.current?.connected) return;
 
-  // Disconnect old socket before creating new one
   if (socketRef.current) {
     socketRef.current.disconnect();
   }
@@ -47,7 +43,6 @@ useEffect(() => {
 
   socketRef.current.on('disconnect', (reason) => {
     setConnected(false);
-    // Auto-reconnect unless manually disconnected
     if (reason === 'io server disconnect') {
       socketRef.current?.connect();
     }

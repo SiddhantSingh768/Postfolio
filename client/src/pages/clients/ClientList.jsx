@@ -262,9 +262,7 @@ export const ClientList = () => {
   );
 };
 
-// Dropdown menu component
 const ClientMenu = ({ client, onEdit, onArchive, onPortal, portalLoading, onView, onClose }) => {
-  // Close when clicking outside
   const handleBackdrop = () => onClose();
 
   return (

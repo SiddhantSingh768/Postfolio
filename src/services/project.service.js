@@ -6,26 +6,6 @@ const logger    = require('../config/logger');
 const { buildWorkspaceQuery, getPagination } = require('../utils/queryHelpers');
 const { markStepComplete } = require('./onboarding.service');
 
-// ─── State machine ────────────────────────────────────────────────────────────
-//
-// This defines every valid transition.
-// Any move not listed here is rejected with a 409.
-//
-// Read it like: "from state X, you may move to states Y and Z"
-//
-// Why these transitions specifically?
-//   draft → active:      Work begins. Client has been briefed.
-//   active → on_hold:    Work paused. Could be client decision or blocker.
-//   active → completed:  All deliverables done. Invoice can now be raised.
-//   on_hold → active:    Work resumes.
-//   on_hold → cancelled: Project won't proceed from paused state.
-//   completed → (none):  Terminal. You can't un-complete a project.
-//   cancelled → (none):  Terminal. You can't un-cancel a project.
-//
-// What you CANNOT do:
-//   draft → completed (must go through active)
-//   cancelled → active (can't resurrect a cancelled project — create a new one)
-//   completed → active (project is done — raise an invoice or start a new one)
 
 const VALID_TRANSITIONS = {
   draft:     ['active'],
@@ -35,8 +15,6 @@ const VALID_TRANSITIONS = {
   cancelled: []
 };
 
-// transitionProject mutates the project document and saves it.
-// It does NOT return the project — callers use the mutated object directly.
 const transitionProject = async (project, newStatus) => {
   const allowed = VALID_TRANSITIONS[project.status];
 
@@ -58,7 +36,6 @@ const transitionProject = async (project, newStatus) => {
   );
 };
 
-// ─── List projects ────────────────────────────────────────────────────────────
 
 const listProjects = async (workspaceId, query) => {
   const { skip, limit, page } = getPagination(query);
@@ -66,7 +43,6 @@ const listProjects = async (workspaceId, query) => {
   const filter = buildWorkspaceQuery({ isDeleted: false }, workspaceId);
 
   if (query.status) {
-    // Allow filtering by multiple statuses: ?status=active,on_hold
     const statuses = query.status.split(',').map(s => s.trim());
     filter.status = { $in: statuses };
   }
@@ -91,7 +67,6 @@ const listProjects = async (workspaceId, query) => {
   };
 };
 
-// ─── Get single project ───────────────────────────────────────────────────────
 
 const getProject = async (projectId, workspaceId) => {
   const project = await Project.findOne(
@@ -108,10 +83,8 @@ const getProject = async (projectId, workspaceId) => {
   return project;
 };
 
-// ─── Create project ───────────────────────────────────────────────────────────
 
 const createProject = async (workspaceId, data, userId) => {
-  // Verify the client belongs to this workspace before linking
   const client = await Client.findOne(
     buildWorkspaceQuery({ _id: data.clientId, isArchived: false }, workspaceId)
   );
@@ -133,7 +106,6 @@ const createProject = async (workspaceId, data, userId) => {
   return project;
 };
 
-// ─── Update project ───────────────────────────────────────────────────────────
 
 const updateProject = async (projectId, workspaceId, updates) => {
   const project = await Project.findOne(
@@ -141,12 +113,10 @@ const updateProject = async (projectId, workspaceId, updates) => {
   );
   if (!project) throw new AppError(404, 'PROJECT_NOT_FOUND', 'Project not found');
 
-  // Handle status transition separately via state machine
   if (updates.status && updates.status !== project.status) {
     await transitionProject(project, updates.status);
   }
 
-  // Update non-status fields
   const allowed = ['title', 'description', 'startDate', 'endDate', 'budget', 'tags', 'notifyClient'];
   allowed.forEach(field => {
     if (updates[field] !== undefined) project[field] = updates[field];
@@ -158,7 +128,6 @@ const updateProject = async (projectId, workspaceId, updates) => {
   return project;
 };
 
-// ─── Delete project (soft delete, draft only) ─────────────────────────────────
 
 const deleteProject = async (projectId, workspaceId) => {
   const project = await Project.findOne(
@@ -166,8 +135,6 @@ const deleteProject = async (projectId, workspaceId) => {
   );
   if (!project) throw new AppError(404, 'PROJECT_NOT_FOUND', 'Project not found');
 
-  // Only draft projects can be deleted — active or completed projects
-  // have financial implications (invoices may exist)
   if (project.status !== 'draft') {
     throw new AppError(
       409,

@@ -1,14 +1,9 @@
 const { getRedisClient } = require('../config/redis');
 const logger = require('../config/logger');
 
-// Cache service abstracts Redis operations.
-// Every method degrades gracefully — if Redis is unavailable,
-// the app continues to work, just without caching.
 
-const DEFAULT_TTL = 300; // 5 minutes in seconds
+const DEFAULT_TTL = 300; 
 
-// Get a cached value
-// Returns parsed JSON if found, null if not found or Redis unavailable
 const get = async (key) => {
   try {
     const client = getRedisClient();
@@ -20,12 +15,10 @@ const get = async (key) => {
     return JSON.parse(value);
   } catch (err) {
     logger.warn({ err: err.message, key }, 'Cache get failed');
-    return null; // Degrade gracefully
+    return null;
   }
 };
 
-// Set a value in cache with TTL
-// Returns true if successful, false if failed
 const set = async (key, value, ttlSeconds = DEFAULT_TTL) => {
   try {
     const client = getRedisClient();
@@ -39,7 +32,6 @@ const set = async (key, value, ttlSeconds = DEFAULT_TTL) => {
   }
 };
 
-// Delete a cached value (cache invalidation)
 const del = async (key) => {
   try {
     const client = getRedisClient();
@@ -53,8 +45,6 @@ const del = async (key) => {
   }
 };
 
-// Delete multiple keys matching a pattern
-// Used to invalidate all dashboard keys for a workspace
 const delPattern = async (pattern) => {
   try {
     const client = getRedisClient();
@@ -72,7 +62,6 @@ const delPattern = async (pattern) => {
   }
 };
 
-// Cache key builders — centralised so key format never drifts
 const keys = {
   dashboard:  (workspaceId) => `dashboard:${workspaceId}`,
   revenue:    (workspaceId, months) => `revenue:${workspaceId}:${months}`,

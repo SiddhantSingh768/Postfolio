@@ -16,7 +16,6 @@ import { useToast }         from '../../components/ui/Toast';
 import { computeTotals, EMPTY_LINE_ITEM } from '../../utils/gst';
 import { cn } from '../../utils/cn';
 
-// Default due date — 30 days from today
 const defaultDueDate = () => {
   const d = new Date();
   d.setDate(d.getDate() + 30);
@@ -47,18 +46,15 @@ export const InvoiceCreate = () => {
 
   const createMutation = useCreateInvoice();
 
-  // Fetch clients for dropdown
   const { data: clientsData } = useClientList({ limit: 100 });
   const clients = clientsData?.clients || [];
 
-  // Fetch projects for selected client
   const { data: projectsData } = useProjectList({
     client: form.clientId || undefined,
     limit:  100,
   });
   const projects = projectsData?.projects || [];
 
-  // Clear project when client changes
   useEffect(() => {
     if (form.clientId && form.projectId) {
       const projectBelongsToClient = projects.some(p =>
@@ -71,7 +67,6 @@ export const InvoiceCreate = () => {
     }
   }, [form.clientId]);
 
-  // Live GST computation
   const { subtotal, totalGst, grandTotal } = useMemo(
     () => computeTotals(lineItems),
     [lineItems]

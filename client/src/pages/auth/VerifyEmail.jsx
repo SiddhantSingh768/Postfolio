@@ -18,16 +18,13 @@ export const VerifyEmail = () => {
   const [resent, setResent]   = useState(false);
   const inputRefs = useRef([]);
 
-  // Focus first input on mount
   useEffect(() => { inputRefs.current[0]?.focus(); }, []);
 
   const handleChange = (index, value) => {
-    // Only allow digits
     if (!/^\d*$/.test(value)) return;
 
     const newOtp = [...otp];
 
-    // Handle paste of full OTP
     if (value.length > 1) {
       const digits = value.replace(/\D/g, '').slice(0, 6).split('');
       digits.forEach((d, i) => { if (i < 6) newOtp[i] = d; });
@@ -39,7 +36,6 @@ export const VerifyEmail = () => {
     newOtp[index] = value;
     setOtp(newOtp);
 
-    // Auto-advance to next input
     if (value && index < 5) {
       inputRefs.current[index + 1]?.focus();
     }
@@ -67,7 +63,6 @@ export const VerifyEmail = () => {
       });
     } catch (err) {
       setError(err.response?.data?.message || 'Invalid or expired code');
-      // Clear OTP on error
       setOtp(['', '', '', '', '', '']);
       inputRefs.current[0]?.focus();
     } finally {
@@ -80,7 +75,6 @@ export const VerifyEmail = () => {
     try {
       await authApi.register({ email, resend: true });
     } catch {
-      // Ignore — resend might not be a separate endpoint
     } finally {
       setResending(false);
       setResent(true);
@@ -88,17 +82,13 @@ export const VerifyEmail = () => {
     }
   };
 
-  // Auto-submit when all 6 digits entered
   useEffect(() => {
     if (otp.every(d => d !== '')) {
       handleSubmit();
     }
   }, [otp]);
 
-  // In VerifyEmail.jsx — replace the last check:
 if (!email) {
-  // Don't send them to register if they have no email
-  // They might have arrived from a stale link
   return (
     <AuthLayout>
       <div className="text-center">

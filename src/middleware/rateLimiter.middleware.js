@@ -2,17 +2,12 @@ const rateLimit      = require('express-rate-limit');
 const { RedisStore } = require('rate-limit-redis');
 const { getRedisClient } = require('../config/redis');
 
-// Creates a configured rate limiter middleware.
-// Uses Redis store if available, falls back to in-memory store silently.
-// The in-memory fallback is fine for a single instance — the redis store
-// is what matters once you run multiple server instances.
-
 const createLimiter = ({ windowMs, max, message }) => {
   const client = getRedisClient();
   const config = {
     windowMs,
     max,
-    standardHeaders: true,  // Adds RateLimit-* headers to responses
+    standardHeaders: true,
     legacyHeaders:   false,
     message: { status: 'error', code: 'RATE_LIMIT_EXCEEDED', message }
   };
@@ -23,7 +18,6 @@ const createLimiter = ({ windowMs, max, message }) => {
     });
   }
 
-  // Disable rate limiting in tests so we don't accidentally block legitimate test requests
   if (process.env.NODE_ENV === 'test') {
     return (req, res, next) => next();
   }

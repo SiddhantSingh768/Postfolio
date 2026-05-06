@@ -54,7 +54,6 @@ const updateRules = [
     .optional()
     .trim()
     .isLength({ max: 1000 }),
-  // lineItems validation only if provided
   body('lineItems')
     .optional()
     .isArray({ min: 1 }),
@@ -79,13 +78,11 @@ router.patch('/:id',             updateRules,  validateRequest, invoiceCtrl.upda
 router.post('/:id/generate-pdf', invoiceCtrl.generatePDF);
 router.get('/:id/pdf', invoiceCtrl.viewPDF);
 router.post('/:id/cancel',       invoiceCtrl.cancel);
-// Add after the cancel route
 router.post('/:id/send',      invoiceCtrl.send);
 router.post('/:id/mark-paid', [
   body('razorpayPaymentId').optional().trim()
 ], validateRequest, invoiceCtrl.markPaid);
 
-// Audit log route — nested under projects
 router.get('/projects/:projectId/audit-log', invoiceCtrl.getAuditLog);
 
 module.exports = router;

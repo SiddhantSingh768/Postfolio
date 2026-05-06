@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams, useLocation } from 'react-router-do
 import { Zap, Mail, Lock, ArrowRight } from 'lucide-react';
 import { useAuth }           from '../../context/AuthContext';
 import { authApi }           from '../../api/endpoints/auth.api';
+import axiosClient           from '../../api/axiosClient';
 import { Input }             from '../../components/ui/Input';
 import { Button }            from '../../components/ui/Button';
 import { ThemeToggle }       from '../../components/ui/ThemeToggle';
@@ -20,7 +21,6 @@ export const Login = () => {
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Handle Google OAuth callback — token comes back in URL query param
   useEffect(() => {
     const token = searchParams.get('token');
     const err   = searchParams.get('error');
@@ -31,20 +31,14 @@ export const Login = () => {
     }
 
     if (token) {
-      // Store the access token and fetch user info
       window.__postfolioAccessToken = token;
-      import('../../api/endpoints/auth.api').then(({ authApi }) => {
-        import('../../api/axiosClient').then(({ default: axiosClient }) => {
-          axiosClient.get('/auth/me').then(res => {
-            setToken(token);
-            setUser(res.data.data.user);
-            navigate('/dashboard', { replace: true });
-          }).catch(() => {
-            // /auth/me doesn't exist yet — navigate anyway with token
-            setToken(token);
-            navigate('/dashboard', { replace: true });
-          });
-        });
+      axiosClient.get('/auth/me').then(res => {
+        setToken(token);
+        setUser(res.data.data.user);
+        navigate('/dashboard', { replace: true });
+      }).catch(() => {
+        setToken(token);
+        navigate('/dashboard', { replace: true });
       });
     }
   }, []);
@@ -53,7 +47,6 @@ export const Login = () => {
     const state = location.state;
     if (state?.verified && state?.message) {
       setSuccessMsg(state.message);
-      // Clear the state from history
       window.history.replaceState({}, document.title);
     }
   }, [location]);
@@ -66,15 +59,12 @@ const handleSubmit = async (e) => {
   setLoading(true);
   try {
     await login(form.email, form.password);
-    // Navigate to the page they were trying to visit, or dashboard
     const from = location.state?.from?.pathname || '/dashboard';
     navigate(from, { replace: true });
   } catch (err) {
     const code    = err.response?.data?.code;
     const message = err.response?.data?.message || 'Invalid email or password';
 
-    // ONLY redirect to verify-email for this specific error code
-    // Do NOT redirect for any other error
     if (code === 'EMAIL_NOT_VERIFIED') {
       navigate('/verify-email', {
         state: { email: form.email },
@@ -83,8 +73,6 @@ const handleSubmit = async (e) => {
       return;
     }
 
-    // For everything else (wrong password, user not found, etc.)
-    // just show the error message on this page
     setError(message);
   } finally {
     setLoading(false);

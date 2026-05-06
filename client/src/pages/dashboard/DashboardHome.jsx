@@ -444,7 +444,6 @@ export const DashboardHome = () => {
   );
 };
 
-// ── Sub-components ────────────────────────────────────────────────────────────
 
 const StatCard = ({ label, value, sub, icon, trend, urgent }) => (
   <div className={cn(
@@ -588,7 +587,6 @@ const OnboardingChecklist = ({
   );
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 const getGreeting = () => {
   const h = new Date().getHours();

@@ -32,7 +32,6 @@ const milestoneRules = [
   body('order').optional().isInt({ min: 1 }),
 ];
 
-// Project CRUD
 router.get('/',     projectCtrl.list);
 router.post('/',    createRules, validateRequest, projectCtrl.create);
 router.get('/:id',  projectCtrl.get);
@@ -40,12 +39,9 @@ router.patch('/:id', updateRules, validateRequest, projectCtrl.update);
 router.delete('/:id', projectCtrl.remove);
 
 
-// Add at the top with other requires
 const portalService = require('../services/portal.service');
 const asyncHandler  = require('../utils/asyncHandler');
 
-// Add these routes after the existing project routes
-// Generate portal access link
 router.post('/:id/portal', asyncHandler(async (req, res) => {
   const expiresInDays = req.body.expiresInDays || 30;
   const result = await portalService.generatePortalAccess(
@@ -56,7 +52,6 @@ router.post('/:id/portal', asyncHandler(async (req, res) => {
   res.status(200).json({ status: 'success', data: result });
 }));
 
-// Revoke portal access
 router.delete('/:id/portal', asyncHandler(async (req, res) => {
   const result = await portalService.revokePortalAccess(
     req.params.id,
@@ -65,7 +60,6 @@ router.delete('/:id/portal', asyncHandler(async (req, res) => {
   res.status(200).json({ status: 'success', data: result });
 }));
 
-// Milestones nested under projects
 router.post('/:projectId/milestones', milestoneRules, validateRequest, milestoneCtrl.add);
 
 module.exports = router;

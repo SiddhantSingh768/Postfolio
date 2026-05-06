@@ -33,7 +33,6 @@ export const ClientDrawer = ({ open, onClose, client }) => {
   const updateMutation = useUpdateClient();
   const loading = createMutation.isPending || updateMutation.isPending;
 
-  // Populate form when editing
   useEffect(() => {
     if (client) {
       setForm({

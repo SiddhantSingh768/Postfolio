@@ -15,7 +15,6 @@ export const Clients = () => {
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   
-  // Create Form State
   const [form, setForm] = useState({ name: '', email: '', company: '', phone: '' });
 
   const { data: clients, isLoading } = useQuery({

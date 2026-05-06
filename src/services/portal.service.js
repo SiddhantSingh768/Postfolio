@@ -11,11 +11,6 @@ const {
 }                 = require('../utils/tokenUtils');
 const { buildWorkspaceQuery } = require('../utils/queryHelpers');
 
-// ─── Generate portal access token ────────────────────────────────────────────
-//
-// Creates a signed HMAC token and stores it on the project document.
-// The token encodes: workspaceId, projectId, expiry.
-// Returns the full portal URL to share with the client.
 
 const generatePortalAccess = async (projectId, workspaceId, expiresInDays = 30) => {
   const project = await Project.findOne(
@@ -47,7 +42,6 @@ const generatePortalAccess = async (projectId, workspaceId, expiresInDays = 30) 
   };
 };
 
-// ─── Revoke portal access ─────────────────────────────────────────────────────
 
 const revokePortalAccess = async (projectId, workspaceId) => {
   const project = await Project.findOne(
@@ -64,24 +58,15 @@ const revokePortalAccess = async (projectId, workspaceId) => {
   return { message: 'Portal access revoked. The link is immediately invalid.' };
 };
 
-// ─── Validate portal token ────────────────────────────────────────────────────
-//
-// Called by portalAuth middleware on every portal request.
-// Validates: signature, expiry, workspace+project scope.
-// Returns the decoded token data if valid.
 
 const validatePortalToken = (token, projectId) => {
   if (!token) throw new AppError(401, 'NO_PORTAL_TOKEN', 'Portal token required');
 
   try {
-    // verifyPortalToken throws if signature invalid, expired, or scope mismatch
-    // We don't know the workspaceId from the URL alone so we pass '*' and
-    // validate workspace separately after fetching the project
     const decoded = JSON.parse(
       Buffer.from(token.split('.')[0], 'base64url').toString()
     );
 
-    // Verify with the actual values from the token
     verifyPortalToken(token, decoded.workspaceId, projectId.toString());
 
     return decoded;
@@ -90,13 +75,8 @@ const validatePortalToken = (token, projectId) => {
   }
 };
 
-// ─── Get portal view ──────────────────────────────────────────────────────────
-//
-// Returns everything the client portal needs in a single query.
-// Only returns client-visible data.
 
 const getPortalView = async (projectId, workspaceId) => {
-  // Get project with client
   const project = await Project.findOne({
     _id:          projectId,
     workspace:    workspaceId,
@@ -110,7 +90,6 @@ const getPortalView = async (projectId, workspaceId) => {
     throw new AppError(404, 'PROJECT_NOT_FOUND', 'Project not found or portal not enabled');
   }
 
-  // Get milestones in order
   const milestones = await Milestone.find({
     project:   projectId,
     workspace: workspaceId,
@@ -118,7 +97,6 @@ const getPortalView = async (projectId, workspaceId) => {
   .sort({ order: 1 })
   .lean();
 
-  // Get current, client-visible deliverables for each milestone
   const deliverables = await Deliverable.find({
     project:         projectId,
     workspace:       workspaceId,
@@ -127,7 +105,6 @@ const getPortalView = async (projectId, workspaceId) => {
   })
   .lean();
 
-  // Group deliverables by milestone
   const deliverablesByMilestone = deliverables.reduce((acc, d) => {
     const key = d.milestone.toString();
     if (!acc[key]) acc[key] = [];
@@ -135,13 +112,11 @@ const getPortalView = async (projectId, workspaceId) => {
     return acc;
   }, {});
 
-  // Attach deliverables to milestones
   const milestonesWithDeliverables = milestones.map(m => ({
     ...m,
     deliverables: deliverablesByMilestone[m._id.toString()] || []
   }));
 
-  // Get invoices — only show sent/viewed/paid/overdue to client
   const invoices = await Invoice.find({
     project:   projectId,
     workspace: workspaceId,
@@ -166,22 +141,16 @@ const getPortalView = async (projectId, workspaceId) => {
   };
 };
 
-// ─── Mark invoice as viewed ───────────────────────────────────────────────────
-//
-// Called when client opens an invoice in the portal.
-// Transitions status from sent → viewed (one way, first open only).
-// Notifies the freelancer via email.
 
 const markInvoiceViewed = async (invoiceId, projectId, workspaceId) => {
   const invoice = await Invoice.findOne({
     _id:       invoiceId,
     project:   projectId,
     workspace: workspaceId,
-    status:    'sent', // Only transition from sent → viewed
+    status:    'sent', 
   });
 
   if (!invoice) {
-    // Invoice might already be viewed/paid — that is fine, not an error
     return { alreadyTracked: true };
   }
 
@@ -189,12 +158,10 @@ const markInvoiceViewed = async (invoiceId, projectId, workspaceId) => {
   invoice.viewedAt = new Date();
   await invoice.save();
 
-  // Notify freelancer — fire and forget
   try {
     const { transporter } = require('../config/nodemailer');
     const User = require('../models/user.model');
 
-    // Find the freelancer who owns this workspace
     const freelancer = await User.findOne({
       defaultWorkspace: workspaceId,
       isActive:         true
@@ -223,7 +190,6 @@ const markInvoiceViewed = async (invoiceId, projectId, workspaceId) => {
   return { viewed: true, viewedAt: invoice.viewedAt };
 };
 
-// ─── Submit milestone approval comment ───────────────────────────────────────
 
 const submitApprovalComment = async (milestoneId, projectId, workspaceId, comment) => {
   const milestone = await Milestone.findOne({

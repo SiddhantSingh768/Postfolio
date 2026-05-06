@@ -39,7 +39,6 @@ export const ProjectDetail = () => {
   const updateMutation = useUpdateProject();
   const deleteMutation = useDeleteProject();
 
-  // Project status transition
   const handleTransition = async (newStatus) => {
     try {
       await updateMutation.mutateAsync({ id, data: { status: newStatus } });
@@ -49,7 +48,6 @@ export const ProjectDetail = () => {
     }
   };
 
-  // Delete project
   const handleDelete = async () => {
     try {
       await deleteMutation.mutateAsync(id);
@@ -60,7 +58,6 @@ export const ProjectDetail = () => {
     }
   };
 
-  // Portal link
   const handlePortal = async () => {
     setPortalLoading(true);
     try {
@@ -75,7 +72,6 @@ export const ProjectDetail = () => {
     }
   };
 
-  // ZIP download
   const handleDownloadZip = async () => {
     setZipLoading(true);
     try {

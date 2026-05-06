@@ -17,15 +17,10 @@ const startServer = async () => {
   await verifyEmailConnection();
   await verifyCloudinaryConnection();
 
-  // ── Create HTTP server (instead of app.listen) ───────────────────────────
-  // Socket.io must attach to the raw HTTP server, not the Express app.
-  // This is the only change from Phase 1-5.
   const httpServer = http.createServer(app);
 
-  // Attach Socket.io to the HTTP server
   initSocket(httpServer);
 
-  // Listen on the HTTP server (not app.listen)
   httpServer.listen(PORT, () => {
     logger.info({ port: PORT, env: process.env.NODE_ENV }, 'Server started');
   });
@@ -36,10 +31,8 @@ startServer().catch((err) => {
   process.exit(1);
 });
 
-// Add at the bottom of server.js, after startServer()
 process.on('unhandledRejection', (reason, promise) => {
   logger.error({ reason }, 'Unhandled Promise Rejection');
-  // In production, exit gracefully and let Railway restart the process
   if (process.env.NODE_ENV === 'production') {
     process.exit(1);
   }

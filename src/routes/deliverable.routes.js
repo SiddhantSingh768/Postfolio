@@ -8,8 +8,6 @@ const validateRequest = require('../middleware/validateRequest');
 
 router.use(protect, workspaceScope);
 
-// Validation rules for creating a deliverable record
-// (data comes from Cloudinary's upload response)
 const createRules = [
   body('filename').trim().notEmpty().withMessage('Filename is required'),
   body('publicId').trim().notEmpty().withMessage('Cloudinary publicId is required'),
@@ -25,11 +23,6 @@ const updateRules = [
   body('changeNotes').optional().trim().isLength({ max: 500 }),
 ];
 
-// Milestone-scoped routes
-// GET  /milestones/:milestoneId/deliverables/sign    → get upload signature
-// GET  /milestones/:milestoneId/deliverables         → list deliverables
-// GET  /milestones/:milestoneId/deliverables/history → version history
-// POST /milestones/:milestoneId/deliverables         → create after upload
 
 router.get(
   '/milestones/:milestoneId/deliverables/sign',
@@ -55,11 +48,9 @@ router.post(
   deliverableCtrl.create
 );
 
-// Deliverable-level routes
 router.patch('/:id', updateRules, validateRequest, deliverableCtrl.update);
 router.delete('/:id', deliverableCtrl.remove);
 
-// Project-level ZIP download
 router.get('/projects/:projectId/deliverables/zip', deliverableCtrl.downloadZip);
 
 module.exports = router;

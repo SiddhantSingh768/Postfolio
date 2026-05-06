@@ -30,7 +30,6 @@ export const ProjectDrawer = ({ open, onClose, project, defaultClientId }) => {
   const updateMutation = useUpdateProject();
   const loading = createMutation.isPending || updateMutation.isPending;
 
-  // Fetch clients for the dropdown
   const { data: clientsData } = useClientList({ limit: 100 });
   const clients = clientsData?.clients || [];
 

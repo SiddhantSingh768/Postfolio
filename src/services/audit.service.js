@@ -1,9 +1,6 @@
 const AuditLog = require('../models/auditLog.model');
 const logger   = require('../config/logger');
 
-// createAuditLog is called from every service that performs
-// a write operation. It never throws — a failed audit log
-// entry should not roll back the parent operation.
 
 const createAuditLog = async ({
   action,
@@ -25,12 +22,10 @@ const createAuditLog = async ({
       actor: { userId, role: 'freelancer', ip, userAgent }
     });
   } catch (err) {
-    // Log but never throw — audit failure must not fail business operations
     logger.warn({ err: err.message, action }, 'Audit log write failed');
   }
 };
 
-// Convenience wrappers for common audit events
 const auditInvoiceCreated = (invoice, userId) =>
   createAuditLog({
     action:      'INVOICE_CREATED',

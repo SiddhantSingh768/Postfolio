@@ -12,7 +12,6 @@ const verifyCloudinaryConnection = async () => {
     await cloudinary.api.ping();
     logger.info('Cloudinary connected');
   } catch (err) {
-    // Don't crash the server — warn and continue
     logger.warn({ err: err.message }, 'Cloudinary connection failed');
   }
 };

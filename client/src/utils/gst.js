@@ -1,13 +1,9 @@
-// Mirrors the backend pre-save hook logic exactly.
-// This runs in the browser so the UI stays in sync
-// without needing a server round-trip on every keystroke.
 
 const VALID_GST_RATES = [0, 5, 12, 18, 28];
 
 export const isValidGstRate = (rate) =>
   VALID_GST_RATES.includes(Number(rate));
 
-// Compute totals from an array of line items
 export const computeTotals = (lineItems) => {
   let subtotal = 0;
   let totalGst = 0;
@@ -33,7 +29,6 @@ export const computeTotals = (lineItems) => {
   return { computed, subtotal, totalGst, grandTotal };
 };
 
-// GST breakdown per rate for display
 export const getGstBreakdown = (lineItems) => {
   const breakdown = {};
   lineItems.forEach(item => {

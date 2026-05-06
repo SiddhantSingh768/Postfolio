@@ -139,7 +139,6 @@ export const ProjectList = () => {
             }
           />
         ) : (
-          // Project cards grid
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {projects.map(project => (
               <ProjectCard
@@ -192,7 +191,6 @@ export const ProjectList = () => {
   );
 };
 
-// Project card component
 const ProjectCard = ({
   project, menuOpen, onMenuToggle, onMenuClose,
   onClick, onEdit, onDelete, onPortal

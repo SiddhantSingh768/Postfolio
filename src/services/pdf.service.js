@@ -3,7 +3,6 @@ const { cloudinary } = require('../config/cloudinary');
 const logger  = require('../config/logger');
 const AppError = require('../utils/AppError');
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const formatINR = (amount) =>
   new Intl.NumberFormat('en-IN', {
@@ -19,7 +18,6 @@ const formatDate = (date) =>
     year:  'numeric',
   });
 
-// Colour palette
 const BLUE   = '#1A56DB';
 const DARK   = '#111827';
 const MID    = '#374151';
@@ -40,7 +38,6 @@ const STATUS_COLORS = {
   cancelled:      '#9CA3AF',
 };
 
-// ─── PDF builder ──────────────────────────────────────────────────────────────
 
 const buildInvoicePDF = (invoice, freelancer, client) => {
   return new Promise((resolve, reject) => {
@@ -52,26 +49,21 @@ const buildInvoicePDF = (invoice, freelancer, client) => {
       doc.on('end',   ()    => resolve(Buffer.concat(chunks)));
       doc.on('error', err   => reject(err));
 
-      const W = 595 - 96; // A4 width minus margins = 499
-      const L = 48;       // left margin
+      const W = 595 - 96;
+      const L = 48;
 
-      // ── Header bar ──────────────────────────────────────────────────────────
       doc.rect(L, 48, W, 64).fill(BLUE);
 
-      // Freelancer name (white, left)
       doc.fillColor(WHITE)
          .fontSize(18).font('Helvetica-Bold')
          .text(freelancer.name || 'Freelancer', L + 16, 64, { width: 250 });
 
-      // INVOICE label (white, right)
       doc.fontSize(22).font('Helvetica-Bold')
          .text('INVOICE', L + 260, 58, { width: 223, align: 'right' });
 
-      // Invoice number (white, right, smaller)
       doc.fontSize(10).font('Helvetica')
          .text(invoice.invoiceNumber, L + 260, 84, { width: 223, align: 'right' });
 
-      // ── Status badge ─────────────────────────────────────────────────────────
       const badgeColor = STATUS_COLORS[invoice.status] || MUTED;
       const badgeLabel = invoice.status.replace('_', ' ').toUpperCase();
       const badgeW     = doc.widthOfString(badgeLabel) + 20;
@@ -81,7 +73,6 @@ const buildInvoicePDF = (invoice, freelancer, client) => {
       doc.fillColor(WHITE).fontSize(8).font('Helvetica-Bold')
          .text(badgeLabel, badgeX, 126, { width: badgeW, align: 'center' });
 
-      // ── GSTIN (freelancer) ───────────────────────────────────────────────────
       let y = 150;
       if (freelancer.profile?.gstin) {
         doc.fillColor(MUTED).fontSize(9).font('Helvetica')
@@ -89,14 +80,11 @@ const buildInvoicePDF = (invoice, freelancer, client) => {
         y += 14;
       }
 
-      // ── Divider ──────────────────────────────────────────────────────────────
       doc.moveTo(L, y).lineTo(L + W, y).strokeColor(BORDER).lineWidth(1).stroke();
       y += 16;
 
-      // ── Meta grid: Billed To | Dates | Project ───────────────────────────────
       const col = W / 3;
 
-      // Column 1 — Billed To
       doc.fillColor(MUTED).fontSize(8).font('Helvetica-Bold')
          .text('BILLED TO', L, y);
       doc.fillColor(DARK).fontSize(10).font('Helvetica-Bold')
@@ -112,7 +100,6 @@ const buildInvoicePDF = (invoice, freelancer, client) => {
            .text(`GSTIN: ${client.gstin}`, L, y + (client.company ? 50 : 38));
       }
 
-      // Column 2 — Dates
       const dateX = L + col;
       doc.fillColor(MUTED).fontSize(8).font('Helvetica-Bold')
          .text('INVOICE DATE', dateX, y);
@@ -125,7 +112,6 @@ const buildInvoicePDF = (invoice, freelancer, client) => {
       doc.fillColor(dueDateColor).fontSize(10).font('Helvetica')
          .text(formatDate(invoice.dueDate), dateX, y + 42);
 
-      // Column 3 — Project
       if (invoice.project?.title) {
         const projX = L + col * 2;
         doc.fillColor(MUTED).fontSize(8).font('Helvetica-Bold')
@@ -136,11 +122,9 @@ const buildInvoicePDF = (invoice, freelancer, client) => {
 
       y += 80;
 
-      // ── Divider ──────────────────────────────────────────────────────────────
       doc.moveTo(L, y).lineTo(L + W, y).strokeColor(BORDER).lineWidth(1).stroke();
       y += 14;
 
-      // ── Line items table header ───────────────────────────────────────────────
       doc.rect(L, y, W, 24).fill(BLUE);
 
       const cols = {
@@ -160,7 +144,6 @@ const buildInvoicePDF = (invoice, freelancer, client) => {
 
       y += 24;
 
-      // ── Line item rows ────────────────────────────────────────────────────────
       invoice.lineItems.forEach((item, idx) => {
         const rowH   = 28;
         const rowBg  = idx % 2 === 0 ? WHITE : '#F9FAFB';
@@ -178,11 +161,9 @@ const buildInvoicePDF = (invoice, freelancer, client) => {
         y += rowH;
       });
 
-      // ── Bottom border of table ────────────────────────────────────────────────
       doc.moveTo(L, y).lineTo(L + W, y).strokeColor(BORDER).lineWidth(1).stroke();
       y += 16;
 
-      // ── Totals (right-aligned block) ──────────────────────────────────────────
       const totalsX = L + W - 220;
       const totalsW = 220;
 
@@ -198,7 +179,6 @@ const buildInvoicePDF = (invoice, freelancer, client) => {
 
       drawTotalRow('Subtotal', formatINR(invoice.subtotal));
 
-      // GST breakdown per rate
       const gstByRate = invoice.lineItems.reduce((acc, item) => {
         const key = `${item.gstRate}%`;
         if (!acc[key]) acc[key] = 0;
@@ -210,7 +190,6 @@ const buildInvoicePDF = (invoice, freelancer, client) => {
         if (amount > 0) drawTotalRow(`GST @ ${rate}`, formatINR(amount));
       });
 
-      // Grand total divider
       doc.moveTo(totalsX, y).lineTo(totalsX + totalsW, y)
          .strokeColor(BORDER).lineWidth(1).stroke();
       y += 8;
@@ -223,7 +202,6 @@ const buildInvoicePDF = (invoice, freelancer, client) => {
 
       y += 8;
 
-      // ── Payment link ──────────────────────────────────────────────────────────
       if (invoice.razorpayLinkUrl) {
         doc.rect(L, y, W, 36).fill(LIGHT);
         doc.fillColor(BLUE).fontSize(8).font('Helvetica-Bold')
@@ -233,7 +211,6 @@ const buildInvoicePDF = (invoice, freelancer, client) => {
         y += 48;
       }
 
-      // ── Notes ─────────────────────────────────────────────────────────────────
       if (invoice.notes) {
         doc.rect(L, y, 3, 36).fill(BLUE);
         doc.fillColor(MUTED).fontSize(8).font('Helvetica-Bold')
@@ -243,7 +220,6 @@ const buildInvoicePDF = (invoice, freelancer, client) => {
         y += 50;
       }
 
-      // ── Footer ────────────────────────────────────────────────────────────────
       doc.moveTo(L, 780).lineTo(L + W, 780).strokeColor(BORDER).lineWidth(1).stroke();
       doc.fillColor(MUTED).fontSize(8).font('Helvetica')
          .text(
@@ -259,7 +235,6 @@ const buildInvoicePDF = (invoice, freelancer, client) => {
   });
 };
 
-// ─── Upload to Cloudinary ─────────────────────────────────────────────────────
 
 const uploadPDFToCloudinary = (pdfBuffer, invoiceNumber, workspaceId) => {
   return new Promise((resolve, reject) => {
@@ -288,7 +263,6 @@ const uploadPDFToCloudinary = (pdfBuffer, invoiceNumber, workspaceId) => {
   });
 };
 
-// ─── Combined: generate + upload ─────────────────────────────────────────────
 
 const generateAndUploadPDF = async (invoice, freelancer, client) => {
   try {

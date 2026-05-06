@@ -20,14 +20,12 @@ export const PortalView = () => {
   const token          = params.get('token');
   const { toggle, isDark } = useTheme();
 
-  // Set the token in the portal axios client before any requests fire
   useEffect(() => {
     if (token) setPortalToken(token);
   }, [token]);
 
   const { data, isLoading, error } = usePortalProject(projectId);
 
-  // Token missing — don't even try to load
   if (!token) return <PortalError type="no_token" />;
 
   if (isLoading) return <PortalLoading />;
@@ -180,7 +178,6 @@ export const PortalView = () => {
   );
 };
 
-// ── Sub-components ────────────────────────────────────────────────────────────
 
 const ProgressSection = ({ milestones }) => {
   const completed  = milestones.filter(m => m.status === 'completed').length;
@@ -220,12 +217,10 @@ const PortalInvoiceCard = ({ invoice, projectId }) => {
     try {
       const result = await viewMutation.mutateAsync(invoice._id);
       setOpened(true);
-      // Open PDF if URL is returned
       if (result?.pdfUrl) {
         window.open(result.pdfUrl, '_blank');
       }
     } catch {
-      // Best effort
     } finally {
       setLoading(false);
     }
@@ -371,7 +366,6 @@ const MetaItem = ({ icon, children }) => (
   </div>
 );
 
-// ── Error and loading states ──────────────────────────────────────────────────
 
 const PortalLoading = () => (
   <div className="min-h-screen bg-gray-50 dark:bg-neutral-950 flex items-center justify-center">

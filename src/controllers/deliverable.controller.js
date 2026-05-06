@@ -1,7 +1,6 @@
 const deliverableService = require('../services/deliverable.service');
 const asyncHandler       = require('../utils/asyncHandler');
 
-// Get signed upload parameters (called before uploading to Cloudinary)
 const getSignature = asyncHandler(async (req, res) => {
   const params = await deliverableService.getUploadSignature(
     req.params.milestoneId,
@@ -10,7 +9,6 @@ const getSignature = asyncHandler(async (req, res) => {
   res.status(200).json({ status: 'success', data: params });
 });
 
-// Create deliverable record (called after Cloudinary upload completes)
 const create = asyncHandler(async (req, res) => {
   const deliverable = await deliverableService.createDeliverable(
     req.params.milestoneId,
@@ -21,7 +19,6 @@ const create = asyncHandler(async (req, res) => {
   res.status(201).json({ status: 'success', data: { deliverable } });
 });
 
-// List deliverables for a milestone
 const list = asyncHandler(async (req, res) => {
   const opts = {
     showAll: req.query.showAll === 'true',
@@ -34,7 +31,6 @@ const list = asyncHandler(async (req, res) => {
   res.status(200).json({ status: 'success', data: { deliverables } });
 });
 
-// Version history for a specific filename within a milestone
 const versionHistory = asyncHandler(async (req, res) => {
   const history = await deliverableService.getVersionHistory(
     req.params.milestoneId,
@@ -44,7 +40,6 @@ const versionHistory = asyncHandler(async (req, res) => {
   res.status(200).json({ status: 'success', data: { history } });
 });
 
-// Update deliverable metadata (visibility, change notes)
 const update = asyncHandler(async (req, res) => {
   const deliverable = await deliverableService.updateDeliverable(
     req.params.id,
@@ -54,7 +49,6 @@ const update = asyncHandler(async (req, res) => {
   res.status(200).json({ status: 'success', data: { deliverable } });
 });
 
-// Delete a deliverable version
 const remove = asyncHandler(async (req, res) => {
   const result = await deliverableService.deleteDeliverable(
     req.params.id,
@@ -63,10 +57,6 @@ const remove = asyncHandler(async (req, res) => {
   res.status(200).json({ status: 'success', data: result });
 });
 
-// Stream ZIP of all current deliverables for a project
-// Note: this controller does NOT use asyncHandler because
-// streamProjectZip writes directly to res — a thrown error
-// after headers are sent cannot be handled normally
 const downloadZip = async (req, res, next) => {
   try {
     await deliverableService.streamProjectZip(

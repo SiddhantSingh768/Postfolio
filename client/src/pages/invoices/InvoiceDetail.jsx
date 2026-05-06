@@ -42,7 +42,6 @@ export const InvoiceDetail = () => {
   const cancelMutation    = useCancelInvoice();
   const markPaidMutation  = useMarkPaid();
 
-  // Send invoice
   const handleSend = async () => {
     try {
       await sendMutation.mutateAsync(id);
@@ -52,15 +51,12 @@ export const InvoiceDetail = () => {
     }
   };
 
-  // Generate/view PDF
   const handlePDF = async () => {
     setPdfLoading(true);
     try {
       if (invoice.status === 'draft') {
-        // Generate fresh PDF for drafts
         await generateMutation.mutateAsync(id);
       }
-      // Open via the proxy endpoint
       const url = invoicesApi.viewPDF(id);
       window.open(url, '_blank');
     } catch (err) {
@@ -70,7 +66,6 @@ export const InvoiceDetail = () => {
     }
   };
 
-  // Cancel invoice
   const handleCancel = async () => {
     try {
       await cancelMutation.mutateAsync(id);
@@ -81,7 +76,6 @@ export const InvoiceDetail = () => {
     }
   };
 
-  // Mark paid manually
   const handleMarkPaid = async (razorpayPaymentId) => {
     try {
       await markPaidMutation.mutateAsync({ id, razorpayPaymentId });
@@ -92,7 +86,6 @@ export const InvoiceDetail = () => {
     }
   };
 
-  // Copy payment link
   const copyPaymentLink = async () => {
     if (!invoice?.razorpayLinkUrl) return;
     await navigator.clipboard.writeText(invoice.razorpayLinkUrl);

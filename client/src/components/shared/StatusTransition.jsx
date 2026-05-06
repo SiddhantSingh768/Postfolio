@@ -1,7 +1,6 @@
 import { cn }     from '../../utils/cn';
 import { Button } from '../ui/Button';
 
-// Valid transitions per status — mirrors the backend state machine
 const TRANSITIONS = {
   draft:     [{ to: 'active',    label: 'Start project',   variant: 'primary'   }],
   active:    [

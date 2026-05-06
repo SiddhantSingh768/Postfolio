@@ -15,21 +15,8 @@ const {
 const { generateAndUploadPDF } = require("./pdf.service");
 const { markStepComplete } = require('./onboarding.service');
 
-// ─── Send invoice ─────────────────────────────────────────────────────────────
-//
-// This is the most complex function in the entire backend.
-// It does five things atomically-ish:
-// 1. Generates the PDF
-// 2. Creates a Razorpay Payment Link
-// 3. Locks the invoice (status: sent)
-// 4. Emails the client
-// 5. Writes audit log
-//
-// If Razorpay fails, the invoice rolls back to draft.
-// If email fails, we log and continue — invoice is still sent.
 
 const sendInvoice = async (invoiceId, workspaceId, userId) => {
-  // Fetch full invoice with populated fields
   const invoice = await Invoice.findOne(
     buildWorkspaceQuery({ _id: invoiceId }, workspaceId),
   )
@@ -39,7 +26,6 @@ const sendInvoice = async (invoiceId, workspaceId, userId) => {
   if (!invoice)
     throw new AppError(404, "INVOICE_NOT_FOUND", "Invoice not found");
 
-  // Only draft invoices can be sent
   if (invoice.status !== "draft") {
     throw new AppError(
       409,
@@ -51,7 +37,6 @@ const sendInvoice = async (invoiceId, workspaceId, userId) => {
   const User = require("../models/user.model");
   const freelancer = await User.findById(userId);
 
-  // ── Step 1: Generate PDF if not already done ─────────────────────────────
   if (!invoice.pdfPublicId) {
     try {
       const { publicId, secureUrl } = await generateAndUploadPDF(
@@ -61,24 +46,20 @@ const sendInvoice = async (invoiceId, workspaceId, userId) => {
       );
       invoice.pdfUrl = secureUrl;
       invoice.pdfPublicId = publicId;
-      // Don't save yet — save everything together after Razorpay succeeds
     } catch (err) {
       logger.warn(
         { err: err.message, invoiceId },
         "PDF generation failed during send — continuing",
       );
-      // PDF failure doesn't block sending — client can download later
     }
   }
 
-  // ── Step 2: Create Razorpay Payment Link ──────────────────────────────────
   const razorpay = getRazorpay();
   let razorpayLinkId = null;
   let razorpayLinkUrl = null;
 
   if (razorpay) {
     try {
-      // Razorpay amounts are in paise (1 INR = 100 paise)
       const amountInPaise = Math.round(invoice.grandTotal * 100);
 
       const paymentLink = await razorpay.paymentLink.create({
@@ -91,7 +72,7 @@ const sendInvoice = async (invoiceId, workspaceId, userId) => {
           email: invoice.client.email,
         },
         notify: {
-          email: true, // Razorpay also sends its own email — belt and suspenders
+          email: true, // Razorpay also sends its own email
         },
         reminder_enable: true,
         notes: {
@@ -111,8 +92,6 @@ const sendInvoice = async (invoiceId, workspaceId, userId) => {
         "Razorpay Payment Link created",
       );
     } catch (err) {
-      // ── ROLLBACK: Razorpay failed — invoice stays draft ─────────────────
-      // Do NOT change invoice status. Return error to freelancer.
       logger.error(
         { err: err.message, invoiceId },
         "Razorpay Payment Link creation failed",
@@ -134,8 +113,6 @@ const sendInvoice = async (invoiceId, workspaceId, userId) => {
     }
   }
 
-  // ── Step 3: Lock the invoice ──────────────────────────────────────────────
-  // Everything above succeeded — now commit all changes
   invoice.status = "sent";
   invoice.razorpayLinkId = razorpayLinkId;
   invoice.razorpayLinkUrl = razorpayLinkUrl;
@@ -156,8 +133,6 @@ const sendInvoice = async (invoiceId, workspaceId, userId) => {
     },
   });
 
-  // ── Step 4: Email the client ──────────────────────────────────────────────
-  // Email failure does NOT roll back the invoice — it's already sent
   try {
     await sendInvoiceEmail(
       invoice,
@@ -170,7 +145,6 @@ const sendInvoice = async (invoiceId, workspaceId, userId) => {
       { err: err.message, invoiceId },
       "Client email failed after invoice sent",
     );
-    // Freelancer can manually share the payment link from the dashboard
   }
 
   logger.info(
@@ -180,16 +154,8 @@ const sendInvoice = async (invoiceId, workspaceId, userId) => {
   return invoice;
 };
 
-// ─── Handle Razorpay webhook ──────────────────────────────────────────────────
-//
-// This function is called from the webhook route.
-// rawBody is the Buffer from express.raw() — needed for signature verification.
 
 const handleWebhook = async (rawBody, signature) => {
-  // ── Step 1: Verify HMAC signature ─────────────────────────────────────────
-  // Razorpay signs the raw body with your webhook secret using HMAC-SHA256.
-  // If the signature doesn't match, the request is not from Razorpay.
-  // We must verify BEFORE doing any database operations.
 
   const expectedSignature = crypto
     .createHmac("sha256", process.env.RAZORPAY_WEBHOOK_SECRET)
@@ -199,7 +165,6 @@ const handleWebhook = async (rawBody, signature) => {
   const sigBuffer = Buffer.from(signature, "utf8");
   const expectedBuffer = Buffer.from(expectedSignature, "utf8");
 
-  // timingSafeEqual prevents timing attacks
   if (
     sigBuffer.length !== expectedBuffer.length ||
     !crypto.timingSafeEqual(sigBuffer, expectedBuffer)
@@ -212,25 +177,18 @@ const handleWebhook = async (rawBody, signature) => {
     );
   }
 
-  // Parse the body now that we know it's legitimate
   const event = JSON.parse(rawBody.toString());
 
   logger.info({ eventId: event.id, event: event.event }, "Webhook received");
 
-  // ── Step 2: Idempotency check ──────────────────────────────────────────────
-  // Razorpay retries webhooks if your server doesn't respond with 200 quickly.
-  // This check prevents processing the same event twice.
   const alreadyProcessed = await ProcessedEvent.findOne({ eventId: event.id });
   if (alreadyProcessed) {
     logger.info({ eventId: event.id }, "Duplicate webhook — ignored");
     return { status: "duplicate", message: "Event already processed" };
   }
 
-  // Record this event BEFORE processing
-  // If processing fails, the event won't be recorded and can be retried
   await ProcessedEvent.create({ eventId: event.id });
 
-  // ── Step 3: Route to correct handler ──────────────────────────────────────
   switch (event.event) {
     case "payment_link.paid":
       await handlePaymentLinkPaid(event.payload);
@@ -251,13 +209,11 @@ const handleWebhook = async (rawBody, signature) => {
   return { status: "processed" };
 };
 
-// ─── Payment link paid ────────────────────────────────────────────────────────
 
 const handlePaymentLinkPaid = async (payload) => {
   const paymentLink = payload.payment_link?.entity;
   if (!paymentLink) return;
 
-  // Extract invoiceId from the notes we set when creating the link
   const invoiceId = paymentLink.notes?.invoiceId;
   if (!invoiceId) {
     logger.warn(
@@ -277,13 +233,11 @@ const handlePaymentLinkPaid = async (payload) => {
   );
 };
 
-// ─── Payment captured ─────────────────────────────────────────────────────────
 
 const handlePaymentCaptured = async (payload) => {
   const payment = payload.payment?.entity;
   if (!payment) return;
 
-  // Try to find invoice via payment link notes
   const invoiceId = payment.notes?.invoiceId;
   if (!invoiceId) {
     logger.info(
@@ -302,10 +256,6 @@ const handlePaymentCaptured = async (payload) => {
   );
 };
 
-// ─── Core payment processing ──────────────────────────────────────────────────
-//
-// This is called by both handlePaymentLinkPaid and handlePaymentCaptured.
-// It contains the amount reconciliation logic.
 
 const processPayment = async (
   invoiceId,
@@ -326,21 +276,15 @@ const processPayment = async (
     return;
   }
 
-  // Skip if already paid — idempotency at the business level
   if (invoice.status === "paid") {
     logger.info({ invoiceId }, "Invoice already paid — skipping");
     return;
   }
 
-  // ── Amount reconciliation ─────────────────────────────────────────────────
-  // Compare what Razorpay says was paid vs what the invoice total is.
-  // Allow 1 paisa tolerance for floating point rounding.
   const expectedAmount = invoice.grandTotal;
   const difference = Math.abs(paidAmountINR - expectedAmount);
 
   if (difference > 0.01) {
-    // MISMATCH — do NOT mark as paid
-    // Flag for manual review and alert the freelancer
     logger.warn(
       {
         invoiceId,
@@ -376,7 +320,6 @@ const processPayment = async (
     return; // Stop here — human review needed
   }
 
-  // ── Mark invoice as paid ──────────────────────────────────────────────────
   invoice.status = "paid";
   invoice.paidAt = new Date();
   invoice.paidAmount = paidAmountINR;
@@ -388,10 +331,6 @@ const processPayment = async (
     "Invoice marked as paid",
   );
 
-  // ── Emit real-time event to freelancer dashboard ──────────────────────────
-  // This is the only Socket.io emit in v1.
-  // The freelancer's React dashboard listens for this event
-  // and invalidates the React Query cache — no page refresh needed.
   try {
     const { getIO } = require("../config/socket");
     const io = getIO();
@@ -409,11 +348,9 @@ const processPayment = async (
       logger.info({ room, invoiceId }, "invoice:paid event emitted");
     }
   } catch (err) {
-    // Socket.io emit failure must never crash the payment flow
     logger.warn({ err: err.message }, "Failed to emit invoice:paid event");
   }
 
-  // ── Audit log ─────────────────────────────────────────────────────────────
   await createAuditLog({
     action: "PAYMENT_RECEIVED",
     workspaceId: invoice.workspace,
@@ -426,7 +363,6 @@ const processPayment = async (
     },
   });
 
-  // ── Notify both parties ───────────────────────────────────────────────────
   try {
     await sendPaymentConfirmationEmail(invoice, invoice.client);
   } catch (err) {
@@ -437,7 +373,6 @@ const processPayment = async (
   }
 };
 
-// ─── Payment failed ───────────────────────────────────────────────────────────
 
 const handlePaymentFailed = async (payload) => {
   const payment = payload.payment?.entity;
@@ -449,7 +384,6 @@ const handlePaymentFailed = async (payload) => {
   const invoice = await Invoice.findById(invoiceId);
   if (!invoice) return;
 
-  // Only transition if currently sent/viewed — not if already paid
   if (!["sent", "viewed"].includes(invoice.status)) return;
 
   invoice.status = "payment_failed";
@@ -472,10 +406,6 @@ const handlePaymentFailed = async (payload) => {
   );
 };
 
-// ─── Manual mark as paid ──────────────────────────────────────────────────────
-//
-// Used when the webhook never arrives or payment was made outside Razorpay.
-// Requires the freelancer to enter the Razorpay payment ID for audit purposes.
 
 const markAsPaidManually = async (
   invoiceId,

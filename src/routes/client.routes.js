@@ -6,9 +6,6 @@ const { protect }     = require('../middleware/auth.middleware');
 const workspaceScope  = require('../middleware/workspaceScope');
 const validateRequest = require('../middleware/validateRequest');
 
-// All client routes require authentication
-// protect() → sets req.user and req.workspace
-// workspaceScope() → sets req.workspaceId (shorthand)
 router.use(protect, workspaceScope);
 
 const createRules = [

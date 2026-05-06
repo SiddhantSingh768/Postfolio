@@ -21,13 +21,25 @@ const onboardingRoutes = require('./src/routes/onboarding.routes');
 
 const app = express();
 
-// Security headers (sets X-Content-Type-Options, X-Frame-Options, etc.)
 app.use(helmet());
 
-// CORS — credentials: true is required for cookies to be sent cross-origin
-app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  'http://localhost:5173',
+  'http://localhost:3000',
+].filter(Boolean);
 
-// Structured request logging via Pino
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    callback(new Error(`CORS blocked: ${origin}`));
+  },
+  credentials: true,
+}));
+
 app.use(pinoHttp({ logger }));
 
 app.use(
@@ -36,19 +48,15 @@ app.use(
   webhookRoutes,
 );
 
-// Body parsing
-// The Razorpay webhook route (Phase 5) will override this with raw body parser
 app.use(express.json({ limit: "10kb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// Global rate limiter on all /api routes
 app.use("/api", generalLimiter);
 
 const passport = require("./src/config/passport");
 app.use(passport.initialize());
 
-// Routes
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/clients", clientRoutes);
 app.use("/api/v1/projects", projectRoutes);
@@ -59,7 +67,6 @@ app.use("/api/v1/invoices", invoiceRoutes);
 app.use('/api/v1/analytics',  analyticsRoutes);
 app.use('/api/v1/onboarding', onboardingRoutes);
 
-// Health check — Railway and Vercel use this to confirm the server is alive
 app.get("/health", (req, res) =>
   res.json({
     status: "ok",
@@ -68,7 +75,6 @@ app.get("/health", (req, res) =>
   }),
 );
 
-// 404 — any unmatched route
 app.use((req, res) =>
   res.status(404).json({
     status: "error",
@@ -77,7 +83,6 @@ app.use((req, res) =>
   }),
 );
 
-// Global error handler — must be LAST and must have 4 parameters
 app.use(errorHandler);
 
 module.exports = app;

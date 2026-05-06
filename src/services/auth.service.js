@@ -11,7 +11,6 @@ const {
 const { createSoloWorkspace }  = require('./workspace.service');
 const { sendOTPEmail, sendPasswordResetEmail } = require('./email.service');
 
-// ─── Register ─────────────────────────────────────────────────────────────────
 
 const register = async ({ name, email, password }) => {
   const existing = await User.findOne({ email });
@@ -34,14 +33,12 @@ const register = async ({ name, email, password }) => {
   user.defaultWorkspace = workspace._id;
   await user.save();
 
-  // sendOTPEmail swallows its own errors — registration succeeds even if email fails
   await sendOTPEmail(email, name, otp);
 
   logger.info({ userId: user._id }, 'User registered');
   return { message: 'Registration successful. Check your email for the verification code.' };
 };
 
-// ─── Verify email ─────────────────────────────────────────────────────────────
 
 const verifyEmail = async ({ email, otp }) => {
   const user = await User.findOne({ email });
@@ -64,13 +61,10 @@ const verifyEmail = async ({ email, otp }) => {
   return { message: 'Email verified. You can now log in.' };
 };
 
-// ─── Login ────────────────────────────────────────────────────────────────────
 
 const login = async ({ email, password }) => {
-  // Select passwordHash explicitly — it has no `select: false` but it's good practice
   const user = await User.findOne({ email });
 
-  // Deliberately vague: don't reveal whether the email exists
   if (!user || !user.isActive) {
     throw new AppError(401, 'INVALID_CREDENTIALS', 'Invalid email or password');
   }
@@ -94,7 +88,6 @@ const login = async ({ email, password }) => {
   return { accessToken, refreshToken, user: user.toSafeObject() };
 };
 
-// ─── Refresh token ────────────────────────────────────────────────────────────
 
 const refreshAccessToken = async (incomingToken) => {
   if (!incomingToken) throw new AppError(401, 'NO_REFRESH_TOKEN', 'Refresh token required');
@@ -113,14 +106,11 @@ const refreshAccessToken = async (incomingToken) => {
   });
 
   if (!stored) {
-    // Token was already used (rotation) or revoked — possible theft.
-    // Revoke ALL tokens for this user immediately.
     await RefreshToken.updateMany({ user: decoded.userId }, { isRevoked: true });
     logger.warn({ userId: decoded.userId }, 'Refresh token reuse detected — all tokens revoked');
     throw new AppError(401, 'TOKEN_REUSE_DETECTED', 'Session invalidated for security. Please log in again.');
   }
 
-  // Rotation: revoke old, issue new
   stored.isRevoked = true;
   await stored.save();
 
@@ -137,7 +127,6 @@ const refreshAccessToken = async (incomingToken) => {
   return { accessToken: newAccess, refreshToken: newRefresh };
 };
 
-// ─── Logout ───────────────────────────────────────────────────────────────────
 
 const logout = async (refreshToken) => {
   if (refreshToken) {
@@ -146,12 +135,10 @@ const logout = async (refreshToken) => {
   return { message: 'Logged out successfully' };
 };
 
-// ─── Forgot password ──────────────────────────────────────────────────────────
 
 const forgotPassword = async (email) => {
   const user = await User.findOne({ email });
 
-  // Always return success — don't reveal whether the email exists in the system
   if (!user) {
     return { message: 'If an account exists with that email, a reset link has been sent.' };
   }
@@ -166,7 +153,6 @@ const forgotPassword = async (email) => {
   try {
     await sendPasswordResetEmail(email, user.name, rawToken);
   } catch (err) {
-    // Email failed — roll back the stored token so the user isn't locked out
     user.passwordResetToken   = null;
     user.passwordResetExpires = null;
     await user.save();
@@ -176,7 +162,6 @@ const forgotPassword = async (email) => {
   return { message: 'If an account exists with that email, a reset link has been sent.' };
 };
 
-// ─── Reset password ───────────────────────────────────────────────────────────
 
 const resetPassword = async ({ token, newPassword }) => {
   const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
@@ -193,8 +178,6 @@ const resetPassword = async ({ token, newPassword }) => {
   user.passwordResetExpires = null;
   await user.save();
 
-  // Security: invalidate all sessions on password change.
-  // Forces re-login on all devices.
   await RefreshToken.updateMany({ user: user._id }, { isRevoked: true });
 
   logger.info({ userId: user._id }, 'Password reset');

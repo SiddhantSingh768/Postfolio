@@ -4,15 +4,12 @@ const AppError  = require('../utils/AppError');
 const logger    = require('../config/logger');
 const { buildWorkspaceQuery } = require('../utils/queryHelpers');
 
-// ─── Valid milestone transitions ──────────────────────────────────────────────
-// Simpler than projects — milestones move forward only, except overdue
-// which is set automatically by the cron job in Phase 7
 
 const MILESTONE_TRANSITIONS = {
   pending:     ['in_progress'],
   in_progress: ['completed'],
   completed:   [],
-  overdue:     ['in_progress', 'completed'] // Can still be completed even if overdue
+  overdue:     ['in_progress', 'completed']
 };
 
 const transitionMilestone = (milestone, newStatus) => {
@@ -28,16 +25,13 @@ const transitionMilestone = (milestone, newStatus) => {
   if (newStatus === 'completed') milestone.completedAt = new Date();
 };
 
-// ─── Add milestone to project ─────────────────────────────────────────────────
 
 const addMilestone = async (projectId, workspaceId, data) => {
-  // Verify project exists and belongs to workspace
   const project = await Project.findOne(
     buildWorkspaceQuery({ _id: projectId, isDeleted: false }, workspaceId)
   );
   if (!project) throw new AppError(404, 'PROJECT_NOT_FOUND', 'Project not found');
 
-  // Milestones can only be added to active or draft projects
   if (['completed', 'cancelled'].includes(project.status)) {
     throw new AppError(
       409,
@@ -46,7 +40,6 @@ const addMilestone = async (projectId, workspaceId, data) => {
     );
   }
 
-  // Set order to be after the last existing milestone
   const count = await Milestone.countDocuments({ project: projectId });
 
   const milestone = await Milestone.create({
@@ -58,7 +51,6 @@ const addMilestone = async (projectId, workspaceId, data) => {
     order:       data.order       !== undefined ? data.order : count + 1,
   });
 
-  // Add milestone reference to project's milestones array
   await Project.findByIdAndUpdate(projectId, {
     $push: { milestones: milestone._id }
   });
@@ -67,7 +59,6 @@ const addMilestone = async (projectId, workspaceId, data) => {
   return milestone;
 };
 
-// ─── Update milestone ─────────────────────────────────────────────────────────
 
 const updateMilestone = async (milestoneId, workspaceId, updates) => {
   const milestone = await Milestone.findOne(
@@ -75,12 +66,10 @@ const updateMilestone = async (milestoneId, workspaceId, updates) => {
   );
   if (!milestone) throw new AppError(404, 'MILESTONE_NOT_FOUND', 'Milestone not found');
 
-  // Handle status transition
   if (updates.status && updates.status !== milestone.status) {
     transitionMilestone(milestone, updates.status);
   }
 
-  // Update non-status fields
   const allowed = ['title', 'description', 'dueDate', 'order'];
   allowed.forEach(field => {
     if (updates[field] !== undefined) milestone[field] = updates[field];
@@ -92,7 +81,6 @@ const updateMilestone = async (milestoneId, workspaceId, updates) => {
   return milestone;
 };
 
-// ─── Delete milestone ─────────────────────────────────────────────────────────
 
 const deleteMilestone = async (milestoneId, workspaceId) => {
   const milestone = await Milestone.findOne(
@@ -100,7 +88,6 @@ const deleteMilestone = async (milestoneId, workspaceId) => {
   );
   if (!milestone) throw new AppError(404, 'MILESTONE_NOT_FOUND', 'Milestone not found');
 
-  // Cannot delete a milestone that has deliverables — Phase 3 enforces this
   if (milestone.deliverables.length > 0) {
     throw new AppError(
       409,
@@ -109,7 +96,6 @@ const deleteMilestone = async (milestoneId, workspaceId) => {
     );
   }
 
-  // Remove from project's milestones array
   await Project.findByIdAndUpdate(milestone.project, {
     $pull: { milestones: milestoneId }
   });

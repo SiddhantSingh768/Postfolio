@@ -3,8 +3,6 @@ const AppError  = require('../utils/AppError');
 const User      = require('../models/user.model');
 const Workspace = require('../models/workspace.model');
 
-// Attaches req.user, req.workspace, and req.workspaceId to every protected request.
-// Controllers and services never re-fetch the user — they use req.user directly.
 
 const protect = async (req, res, next) => {
   try {
@@ -14,7 +12,7 @@ const protect = async (req, res, next) => {
     }
 
     const token   = authHeader.split(' ')[1];
-    const decoded = verifyAccessToken(token); // throws if expired or invalid
+    const decoded = verifyAccessToken(token);
 
     const user = await User.findById(decoded.userId).select('-passwordHash');
     if (!user || !user.isActive) {
@@ -28,16 +26,13 @@ const protect = async (req, res, next) => {
 
     req.user        = user;
     req.workspace   = workspace;
-    req.workspaceId = workspace._id; // Convenient shorthand for all DB queries
+    req.workspaceId = workspace._id;
 
     next();
   } catch (err) {
     next(err);
   }
 };
-
-// Use after protect() to restrict a route to specific roles.
-// Example: router.delete('/users/:id', protect, restrictTo('admin'), handler)
 const restrictTo = (...roles) => (req, res, next) => {
   if (!roles.includes(req.user.role)) {
     return next(new AppError(403, 'FORBIDDEN', 'You do not have permission for this action'));

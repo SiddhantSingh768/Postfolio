@@ -1,6 +1,5 @@
 import { cn } from '../../utils/cn';
 
-// Visual pipeline showing invoice lifecycle
 const STEPS = [
   { status: 'draft',   label: 'Draft'   },
   { status: 'sent',    label: 'Sent'    },

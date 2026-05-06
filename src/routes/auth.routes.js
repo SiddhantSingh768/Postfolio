@@ -8,11 +8,9 @@ const validateRequest = require('../middleware/validateRequest');
 const passport     = require('../config/passport');
 const RefreshToken = require('../models/refreshToken.model');
 const { generateAccessToken, generateRefreshToken } = require('../utils/tokenUtils');
-// In auth.routes.js — add these two routes
 const { protect } = require('../middleware/auth.middleware');
 const workspaceScope = require('../middleware/workspaceScope');
 
-// Get current user
 router.get('/me', protect, (req, res) => {
   res.status(200).json({
     status: 'success',
@@ -20,7 +18,6 @@ router.get('/me', protect, (req, res) => {
   });
 });
 
-// Update profile
 router.patch('/profile', protect, asyncHandler(async (req, res) => {
   const User    = require('../models/user.model');
   const allowed = ['name', 'profile', 'invoiceSettings', 'avatarUrl'];
@@ -83,8 +80,6 @@ router.get('/google/callback',
       });
 
       res.cookie('refreshToken', refreshToken, COOKIE_OPTIONS);
-      // Redirect to frontend with access token in URL query param.
-      // Frontend reads it once, stores in React state, removes from URL.
       res.redirect(`${process.env.CLIENT_URL}/auth/callback?token=${accessToken}`);
     } catch (err) {
       res.redirect(`${process.env.CLIENT_URL}/login?error=oauth_failed`);

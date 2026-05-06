@@ -1,16 +1,12 @@
 const authService = require('../services/auth.service');
-
-// asyncHandler wraps async route handlers so any thrown error
-// is automatically passed to next() → errorHandler.
-// Without this, an unhandled async rejection crashes the server.
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
 
 const COOKIE_OPTIONS = {
-  httpOnly: true,                                         // Not accessible via JavaScript
-  secure:   process.env.NODE_ENV === 'production',        // HTTPS only in production
-  sameSite: 'strict',                                     // No cross-site sending
-  maxAge:   7 * 24 * 60 * 60 * 1000                      // 7 days in milliseconds
+  httpOnly: true,                                         
+  secure:   process.env.NODE_ENV === 'production',        
+  sameSite: 'strict',                                     
+  maxAge:   7 * 24 * 60 * 60 * 1000                      
 };
 
 const register = asyncHandler(async (req, res) => {
@@ -25,7 +21,6 @@ const verifyEmail = asyncHandler(async (req, res) => {
 
 const login = asyncHandler(async (req, res) => {
   const { accessToken, refreshToken, user } = await authService.login(req.body);
-  // Refresh token goes in cookie — never in response body
   res.cookie('refreshToken', refreshToken, COOKIE_OPTIONS);
   res.status(200).json({ status: 'success', data: { accessToken, user } });
 });

@@ -16,7 +16,6 @@ import { formatDate, formatFileSize, isOverdue } from '../../utils/formatters';
 import { useToast }           from '../ui/Toast';
 import { cn }                 from '../../utils/cn';
 
-// Status icon mapping
 const StatusIcon = ({ status, className }) => {
   const icons = {
     completed:   <CheckCircle2 className={cn('text-success', className)} />,
@@ -27,7 +26,6 @@ const StatusIcon = ({ status, className }) => {
   return icons[status] || icons.pending;
 };
 
-// Status transitions for milestones
 const MILESTONE_TRANSITIONS = {
   pending:     ['in_progress'],
   in_progress: ['completed'],
@@ -308,7 +306,6 @@ export const MilestoneTimeline = ({
   );
 };
 
-// Individual deliverable row
 const DeliverableRow = ({ deliverable }) => {
   const toast = useToast();
 

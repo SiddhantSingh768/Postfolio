@@ -5,16 +5,10 @@ const AppError  = require('../utils/AppError');
 const logger    = require('../config/logger');
 const cache     = require('./cache.service');
 
-// ─── Dashboard analytics ──────────────────────────────────────────────────────
-//
-// Runs 4 MongoDB aggregation pipelines and returns combined results.
-// Results are cached in Redis for 5 minutes.
-// Cache is invalidated whenever an invoice is created, updated, or paid.
 
 const getDashboardStats = async (workspaceId) => {
   const cacheKey = cache.keys.dashboard(workspaceId);
 
-  // Check cache first
   const cached = await cache.get(cacheKey);
   if (cached) {
     logger.info({ workspaceId }, 'Dashboard stats served from cache');
@@ -23,7 +17,6 @@ const getDashboardStats = async (workspaceId) => {
 
   logger.info({ workspaceId }, 'Dashboard stats computed from DB');
 
-  // Run all pipelines concurrently using Promise.all
   const [
     revenueStats,
     projectStats,
@@ -45,13 +38,11 @@ const getDashboardStats = async (workspaceId) => {
     fromCache:        false,
   };
 
-  // Store in cache — 5 minute TTL
   await cache.set(cacheKey, result, 300);
 
   return result;
 };
 
-// ─── Revenue stats pipeline ───────────────────────────────────────────────────
 
 const getRevenueStats = async (workspaceId) => {
   const now       = new Date();
@@ -60,26 +51,21 @@ const getRevenueStats = async (workspaceId) => {
   const lastMonthEnd   = new Date(now.getFullYear(), now.getMonth(), 0);
 
   const result = await Invoice.aggregate([
-    // Only look at this workspace's paid invoices
     {
       $match: {
         workspace: workspaceId,
         status:    'paid',
       }
     },
-    // Use $facet to run multiple sub-pipelines in one query
     {
       $facet: {
-        // All time total
         allTime: [
           { $group: { _id: null, total: { $sum: '$paidAmount' }, count: { $sum: 1 } } }
         ],
-        // This month
         thisMonth: [
           { $match: { paidAt: { $gte: thisMonthStart } } },
           { $group: { _id: null, total: { $sum: '$paidAmount' }, count: { $sum: 1 } } }
         ],
-        // Last month
         lastMonth: [
           { $match: { paidAt: { $gte: lastMonthStart, $lte: lastMonthEnd } } },
           { $group: { _id: null, total: { $sum: '$paidAmount' }, count: { $sum: 1 } } }
@@ -88,7 +74,6 @@ const getRevenueStats = async (workspaceId) => {
     }
   ]);
 
-  // Outstanding amount — sum of all sent/viewed/overdue invoices
   const outstanding = await Invoice.aggregate([
     {
       $match: {
@@ -111,7 +96,6 @@ const getRevenueStats = async (workspaceId) => {
   };
 };
 
-// ─── Project stats pipeline ───────────────────────────────────────────────────
 
 const getProjectStats = async (workspaceId) => {
   const now            = new Date();
@@ -153,7 +137,6 @@ const getProjectStats = async (workspaceId) => {
   };
 };
 
-// ─── Invoice status breakdown ─────────────────────────────────────────────────
 
 const getInvoiceBreakdown = async (workspaceId) => {
   const result = await Invoice.aggregate([
@@ -168,7 +151,6 @@ const getInvoiceBreakdown = async (workspaceId) => {
     { $sort: { count: -1 } }
   ]);
 
-  // Transform into a more usable format
   return result.map(item => ({
     status:      item._id,
     count:       item.count,
@@ -176,7 +158,6 @@ const getInvoiceBreakdown = async (workspaceId) => {
   }));
 };
 
-// ─── Top clients by revenue ───────────────────────────────────────────────────
 
 const getTopClients = async (workspaceId) => {
   const result = await Invoice.aggregate([
@@ -195,7 +176,6 @@ const getTopClients = async (workspaceId) => {
     },
     { $sort: { revenue: -1 } },
     { $limit: 5 },
-    // Join with clients collection to get client name
     {
       $lookup: {
         from:         'clients',
@@ -220,10 +200,6 @@ const getTopClients = async (workspaceId) => {
   return result;
 };
 
-// ─── Monthly revenue trend ────────────────────────────────────────────────────
-//
-// Returns revenue per month for the last N months.
-// Used for the line chart on the dashboard.
 
 const getMonthlyRevenue = async (workspaceId, months = 12) => {
   const cacheKey = cache.keys.revenue(workspaceId, months);
@@ -262,7 +238,6 @@ const getMonthlyRevenue = async (workspaceId, months = 12) => {
         month:   '$_id.month',
         revenue: 1,
         count:   1,
-        // Create a label like "Jan 2026"
         label: {
           $concat: [
             { $arrayElemAt: [
@@ -278,7 +253,6 @@ const getMonthlyRevenue = async (workspaceId, months = 12) => {
     }
   ]);
 
-  // Fill in months with 0 revenue so charts don't have gaps
   const filledData = fillMissingMonths(result, months);
 
   await cache.set(cacheKey, filledData, 300);
@@ -286,8 +260,6 @@ const getMonthlyRevenue = async (workspaceId, months = 12) => {
   return { data: filledData, fromCache: false };
 };
 
-// Helper: fills in months with no revenue as 0
-// so the line chart always shows a continuous 12-month view
 const fillMissingMonths = (data, months) => {
   const result = [];
   const now    = new Date();
@@ -314,10 +286,6 @@ const fillMissingMonths = (data, months) => {
   return result;
 };
 
-// ─── Invalidate dashboard cache ───────────────────────────────────────────────
-//
-// Called from invoice.service.js whenever an invoice is
-// created, updated, sent, or paid.
 
 const invalidateDashboardCache = async (workspaceId) => {
   await cache.del(cache.keys.dashboard(workspaceId));

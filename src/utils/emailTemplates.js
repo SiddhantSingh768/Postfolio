@@ -1,5 +1,3 @@
-// Returns HTML strings. Keeping templates here means you can change
-// email design without touching business logic in auth.service.js.
 
 const otpEmailTemplate = (name, otp) => `
 <!DOCTYPE html><html><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">

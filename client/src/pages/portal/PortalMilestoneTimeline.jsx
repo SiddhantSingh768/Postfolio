@@ -141,7 +141,6 @@ export const PortalMilestoneTimeline = ({ milestones = [], projectId }) => {
 
                   {/* Approval section */}
                   {hasApproval ? (
-                    // Already approved — show the comment
                     <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg px-3 py-2.5">
                       <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-1 flex items-center gap-1.5">
                         <CheckCircle2 className="w-3.5 h-3.5" />
@@ -152,7 +151,6 @@ export const PortalMilestoneTimeline = ({ milestones = [], projectId }) => {
                       </p>
                     </div>
                   ) : milestone.status === 'completed' ? (
-                    // Completed but no approval yet — offer approval
                     isCommenting ? (
                       <div className="space-y-2">
                         <textarea
@@ -209,7 +207,6 @@ export const PortalMilestoneTimeline = ({ milestones = [], projectId }) => {
   );
 };
 
-// Status badge for portal — uses plain colors, no dependency on design system
 const MilestoneStatusBadge = ({ status }) => {
   const configs = {
     pending:     { bg: 'bg-gray-100 dark:bg-gray-800',   text: 'text-gray-500 dark:text-gray-400',   label: 'Pending'     },

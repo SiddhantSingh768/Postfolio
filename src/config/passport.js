@@ -12,11 +12,9 @@ passport.use(new GoogleStrategy(
   },
   async (accessToken, refreshToken, profile, done) => {
     try {
-      // Case 1: User already linked this Google account
       let user = await User.findOne({ oauthProvider: 'google', oauthId: profile.id });
       if (user) return done(null, user);
 
-      // Case 2: Email exists but Google not linked yet — link it
       user = await User.findOne({ email: profile.emails[0].value });
       if (user) {
         user.oauthProvider = 'google';
@@ -26,7 +24,6 @@ passport.use(new GoogleStrategy(
         return done(null, user);
       }
 
-      // Case 3: Brand new user — create account + workspace
       user = await User.create({
         name:            profile.displayName,
         email:           profile.emails[0].value,

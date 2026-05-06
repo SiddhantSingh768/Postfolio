@@ -57,7 +57,6 @@ const getAuditLog = asyncHandler(async (req, res) => {
   res.status(200).json({ status: 'success', data: result });
 });
 
-// Add this — note: NOT using asyncHandler because we're piping a stream
 const viewPDF = async (req, res, next) => {
   try {
     await invoiceService.streamPDFToResponse(
@@ -71,10 +70,8 @@ const viewPDF = async (req, res, next) => {
 };
 
 
-// Add these two imports at the top
 const paymentService = require('../services/payment.service');
 
-// Add these two controller functions
 const send = asyncHandler(async (req, res) => {
   const invoice = await paymentService.sendInvoice(
     req.params.id,
@@ -94,7 +91,6 @@ const markPaid = asyncHandler(async (req, res) => {
   res.status(200).json({ status: 'success', data: { invoice } });
 });
 
-// Update exports
 module.exports = {
   list, get, create, update,
   generatePDF, cancel, getAuditLog,

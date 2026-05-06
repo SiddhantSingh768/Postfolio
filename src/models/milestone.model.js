@@ -3,7 +3,6 @@ const mongoose = require('mongoose');
 const MILESTONE_STATUSES = ['pending', 'in_progress', 'completed', 'overdue'];
 
 const milestoneSchema = new mongoose.Schema({
-  // Both workspace and project are indexed for efficient querying
   workspace: {
     type:     mongoose.Schema.Types.ObjectId,
     ref:      'Workspace',
@@ -24,16 +23,13 @@ const milestoneSchema = new mongoose.Schema({
   dueDate:     { type: Date, default: null },
   completedAt: { type: Date, default: null },
 
-  // Deliverable ObjectIds — populated in Phase 3
   deliverables: [{
     type: mongoose.Schema.Types.ObjectId,
     ref:  'Deliverable'
   }],
 
-  // Display order within the project (1-based)
   order: { type: Number, default: 0 },
 
-  // Approval comment from client via portal (Phase 6)
   clientNote: { type: String, maxlength: 500, default: null }
 
 }, { timestamps: true });

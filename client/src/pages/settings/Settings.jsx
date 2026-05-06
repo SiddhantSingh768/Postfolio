@@ -27,7 +27,6 @@ export const Settings = () => {
   const [activeTab, setActiveTab]   = useState('profile');
   const [loading, setLoading]       = useState(false);
 
-  // Profile form state
   const [profile, setProfile] = useState({
     name:    user?.name    || '',
     phone:   user?.profile?.phone   || '',
@@ -35,13 +34,11 @@ export const Settings = () => {
     gstin:   user?.profile?.gstin   || '',
   });
 
-  // Invoice settings
   const [invoiceSettings, setInvoiceSettings] = useState({
     prefix:         user?.invoiceSettings?.prefix        || 'INV',
     defaultDueDays: user?.invoiceSettings?.defaultDueDays || 30,
   });
 
-  // Sync when user loads
   useEffect(() => {
     if (user) {
       setProfile({

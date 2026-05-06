@@ -9,11 +9,6 @@ const { auditInvoiceCreated, auditInvoiceCancelled } = require('./audit.service'
 const { generateAndUploadPDF } = require('./pdf.service');
 const { invalidateDashboardCache } = require('./analytics.service');
 
-// ─── Edit lock ────────────────────────────────────────────────────────────────
-//
-// This is the central enforcement point for invoice immutability.
-// Call this at the top of any function that modifies invoice data.
-// Only draft invoices are editable.
 
 const EDITABLE_STATUSES = ['draft'];
 
@@ -28,21 +23,12 @@ const assertInvoiceEditable = (invoice) => {
   }
 };
 
-// ─── Atomic invoice number generation ─────────────────────────────────────────
-//
-// The $inc operator atomically increments nextNumber on the User document
-// and returns the document BEFORE the increment (new: false).
-// This means:
-//   Request A reads nextNumber: 5 → invoice gets INV-0005 → DB becomes 6
-//   Request B reads nextNumber: 6 → invoice gets INV-0006 → DB becomes 7
-// They can run simultaneously — $inc is atomic at the document level.
-// No two invoices will ever get the same number.
 
 const generateInvoiceNumber = async (userId) => {
   const user = await User.findByIdAndUpdate(
     userId,
     { $inc: { 'invoiceSettings.nextNumber': 1 } },
-    { new: false } // IMPORTANT: returns doc BEFORE increment
+    { new: false }
   );
 
   if (!user) throw new AppError(404, 'USER_NOT_FOUND', 'User not found');
@@ -50,11 +36,9 @@ const generateInvoiceNumber = async (userId) => {
   const prefix = user.invoiceSettings?.prefix    || 'INV';
   const num    = user.invoiceSettings?.nextNumber || 1;
 
-  // Zero-pad to 4 digits: INV-0001, INV-0042, INV-1234
   return `${prefix}-${String(num).padStart(4, '0')}`;
 };
 
-// ─── List invoices ────────────────────────────────────────────────────────────
 
 const listInvoices = async (workspaceId, query) => {
   const { skip, limit, page } = getPagination(query);
@@ -83,7 +67,6 @@ const listInvoices = async (workspaceId, query) => {
   };
 };
 
-// ─── Get single invoice ───────────────────────────────────────────────────────
 
 const getInvoice = async (invoiceId, workspaceId) => {
   const invoice = await Invoice.findOne(
@@ -97,16 +80,13 @@ const getInvoice = async (invoiceId, workspaceId) => {
   return invoice;
 };
 
-// ─── Create invoice ───────────────────────────────────────────────────────────
 
 const createInvoice = async (workspaceId, userId, data) => {
-  // Validate client belongs to workspace
   const client = await Client.findOne(
     buildWorkspaceQuery({ _id: data.clientId, isArchived: false }, workspaceId)
   );
   if (!client) throw new AppError(404, 'CLIENT_NOT_FOUND', 'Client not found');
 
-  // Validate project if provided
   if (data.projectId) {
     const project = await Project.findOne(
       buildWorkspaceQuery({ _id: data.projectId, isDeleted: false }, workspaceId)
@@ -114,15 +94,12 @@ const createInvoice = async (workspaceId, userId, data) => {
     if (!project) throw new AppError(404, 'PROJECT_NOT_FOUND', 'Project not found');
   }
 
-  // Generate unique invoice number atomically
   const invoiceNumber = await generateInvoiceNumber(userId);
 
-  // Compute due date from default settings if not provided
   const user    = await User.findById(userId);
   const dueDays = user.invoiceSettings?.defaultDueDays || 30;
   const dueDate = data.dueDate || new Date(Date.now() + dueDays * 24 * 60 * 60 * 1000);
 
-  // Create invoice — pre-save hook computes totals automatically
   const invoice = await Invoice.create({
     workspace:     workspaceId,
     client:        data.clientId,
@@ -144,7 +121,6 @@ const createInvoice = async (workspaceId, userId, data) => {
   return invoice;
 };
 
-// ─── Update invoice (draft only) ──────────────────────────────────────────────
 
 const updateInvoice = async (invoiceId, workspaceId, userId, updates) => {
   const invoice = await Invoice.findOne(
@@ -152,16 +128,13 @@ const updateInvoice = async (invoiceId, workspaceId, userId, updates) => {
   );
   if (!invoice) throw new AppError(404, 'INVOICE_NOT_FOUND', 'Invoice not found');
 
-  // EDIT LOCK — throws 409 if not draft
   assertInvoiceEditable(invoice);
 
-  // Whitelist updatable fields
   const allowed = ['lineItems', 'dueDate', 'notes', 'issueDate'];
   allowed.forEach(field => {
     if (updates[field] !== undefined) invoice[field] = updates[field];
   });
 
-  // pre-save hook recomputes totals if lineItems changed
   await invoice.save();
 
   logger.info({ invoiceId, workspaceId }, 'Invoice updated');
@@ -169,7 +142,6 @@ const updateInvoice = async (invoiceId, workspaceId, userId, updates) => {
   return invoice;
 };
 
-// ─── Generate PDF for draft invoice ───────────────────────────────────────────
 
 const generatePDF = async (invoiceId, workspaceId, userId) => {
   const invoice = await Invoice.findOne(
@@ -211,11 +183,6 @@ const generatePDF = async (invoiceId, workspaceId, userId) => {
 return { pdfUrl: inlineUrl };
 };
 
-// ─── Cancel invoice ───────────────────────────────────────────────────────────
-//
-// Cancellation is the correct way to "edit" a sent invoice.
-// The original invoice is preserved in audit history.
-// The freelancer creates a new invoice with the corrections.
 
 const cancelInvoice = async (invoiceId, workspaceId, userId) => {
   const invoice = await Invoice.findOne(
@@ -223,7 +190,6 @@ const cancelInvoice = async (invoiceId, workspaceId, userId) => {
   );
   if (!invoice) throw new AppError(404, 'INVOICE_NOT_FOUND', 'Invoice not found');
 
-  // Cannot cancel a paid invoice
   if (invoice.status === 'paid') {
     throw new AppError(
       409,
@@ -232,7 +198,6 @@ const cancelInvoice = async (invoiceId, workspaceId, userId) => {
     );
   }
 
-  // Cannot cancel an already cancelled invoice
   if (invoice.status === 'cancelled') {
     throw new AppError(
       409,
@@ -259,7 +224,6 @@ const cancelInvoice = async (invoiceId, workspaceId, userId) => {
   };
 };
 
-// ─── Get audit log for a project ─────────────────────────────────────────────
 
 const getProjectAuditLog = async (projectId, workspaceId, query) => {
   const AuditLog = require('../models/auditLog.model');
@@ -291,7 +255,6 @@ const streamPDFToResponse = async (invoiceId, workspaceId, res) => {
   const { cloudinary } = require('../config/cloudinary');
   const axios = require('axios');
 
-  // Generate a short-lived signed URL to fetch from Cloudinary
   const fetchUrl = cloudinary.url(invoice.pdfPublicId, {
     resource_type: 'raw',
     type:          'upload',
@@ -300,11 +263,9 @@ const streamPDFToResponse = async (invoiceId, workspaceId, res) => {
 
   const response = await axios.get(fetchUrl, { responseType: 'stream' });
 
-  // Set headers so browser renders PDF inline
   res.setHeader('Content-Type',        'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="${invoice.invoiceNumber}.pdf"`);
 
-  // Pipe Cloudinary stream directly to HTTP response
   response.data.pipe(res);
 };
 

@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { clientsApi } from '../api/endpoints/clients.api';
 
-// Keys factory — consistent cache keys across the app
 export const clientKeys = {
   all:    ['clients'],
   list:   (params) => ['clients', 'list', params],
@@ -12,7 +11,7 @@ export const useClientList = (params) =>
   useQuery({
     queryKey: clientKeys.list(params),
     queryFn:  () => clientsApi.list(params).then(r => r.data.data),
-    keepPreviousData: true, // Don't flash empty while fetching next page
+    keepPreviousData: true, 
   });
 
 export const useClient = (id) =>

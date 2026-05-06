@@ -1,9 +1,5 @@
 const mongoose = require('mongoose');
 
-// Audit log is append-only.
-// No document is ever updated or deleted.
-// Every write operation in the system appends an entry here.
-
 const AUDIT_ACTIONS = [
   'INVOICE_CREATED',
   'INVOICE_UPDATED',
@@ -61,17 +57,12 @@ const auditLogSchema = new mongoose.Schema({
     index: true
   },
 
-  // Action-specific data: old value, new value, amounts, etc.
   metadata: {
     type:    mongoose.Schema.Types.Mixed,
     default: {}
   }
-
-// Note: no timestamps option — we manage timestamp manually
-// so it's always UTC and queryable as a Date field
 });
 
-// Compound index for querying audit log per workspace + action type
 auditLogSchema.index({ workspaceId: 1, action: 1, timestamp: -1 });
 auditLogSchema.index({ workspaceId: 1, 'resource.id': 1 });
 

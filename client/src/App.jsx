@@ -2,14 +2,12 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ErrorBoundary }   from './components/ui/ErrorBoundary';
 import { PrivateRoute }    from './routes/PrivateRoute';
 
-// Auth pages
 import { Login }          from './pages/auth/Login';
 import { Register }       from './pages/auth/Register';
 import { VerifyEmail }    from './pages/auth/VerifyEmail';
 import { ForgotPassword } from './pages/auth/ForgotPassword';
 import { ResetPassword }  from './pages/auth/ResetPassword';
 
-// App pages
 import { DashboardHome }  from './pages/dashboard/DashboardHome';
 import { ClientList }     from './pages/clients/ClientList';
 import { ClientDetail }   from './pages/clients/ClientDetail';

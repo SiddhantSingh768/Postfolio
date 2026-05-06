@@ -3,7 +3,6 @@ import { X }           from 'lucide-react';
 import { cn }          from '../../utils/cn';
 
 export const Drawer = ({ open, onClose, title, subtitle, children, width = 'max-w-md' }) => {
-  // Close on Escape key
   useEffect(() => {
     if (!open) return;
     const handler = (e) => { if (e.key === 'Escape') onClose(); };
@@ -11,7 +10,6 @@ export const Drawer = ({ open, onClose, title, subtitle, children, width = 'max-
     return () => window.removeEventListener('keydown', handler);
   }, [open, onClose]);
 
-  // Prevent body scroll when open
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };

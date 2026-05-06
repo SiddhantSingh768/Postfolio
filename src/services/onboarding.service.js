@@ -6,7 +6,6 @@ const Invoice   = require('../models/invoice.model');
 const AppError  = require('../utils/AppError');
 const logger    = require('../config/logger');
 
-// ─── Get onboarding status ────────────────────────────────────────────────────
 
 const getOnboardingStatus = async (userId, workspaceId) => {
   const user = await User.findById(userId);
@@ -14,7 +13,6 @@ const getOnboardingStatus = async (userId, workspaceId) => {
 
   const onboarding = user.onboarding || {};
 
-  // Compute checklist status
   const steps = [
     {
       id:        'add_client',
@@ -39,7 +37,6 @@ const getOnboardingStatus = async (userId, workspaceId) => {
   const completedCount = steps.filter(s => s.completed).length;
   const allComplete    = completedCount === steps.length;
 
-  // Auto-complete onboarding if all steps done
   if (allComplete && !onboarding.completedAt) {
     await User.findByIdAndUpdate(userId, {
       'onboarding.completedAt': new Date(),
@@ -57,10 +54,6 @@ const getOnboardingStatus = async (userId, workspaceId) => {
   };
 };
 
-// ─── Mark onboarding step complete ───────────────────────────────────────────
-//
-// Called from other services when the corresponding action is taken.
-// Safe to call multiple times — subsequent calls are no-ops.
 
 const markStepComplete = async (userId, step) => {
   const fieldMap = {
@@ -75,7 +68,6 @@ const markStepComplete = async (userId, step) => {
   await User.findByIdAndUpdate(userId, { $set: { [field]: true } });
 };
 
-// ─── Dismiss onboarding checklist ────────────────────────────────────────────
 
 const dismissOnboarding = async (userId) => {
   await User.findByIdAndUpdate(userId, {
@@ -86,21 +78,8 @@ const dismissOnboarding = async (userId) => {
   return { message: 'Onboarding checklist dismissed' };
 };
 
-// ─── Seed demo workspace ──────────────────────────────────────────────────────
-//
-// Creates realistic sample data so a new user can explore
-// the product immediately without manually creating everything.
-//
-// Creates:
-//   1 client (Acme Technologies)
-//   1 project (Website Redesign) in active status
-//   3 milestones (Discovery, Design, Development)
-//   1 draft invoice
-//
-// Safe to call only once — checks if demo data already exists.
 
 const seedDemoWorkspace = async (userId, workspaceId) => {
-  // Check if demo data already exists
   const existingClient = await Client.findOne({
     workspace: workspaceId,
     name:      'Acme Technologies (Demo)',
@@ -116,7 +95,6 @@ const seedDemoWorkspace = async (userId, workspaceId) => {
 
   logger.info({ workspaceId }, 'Seeding demo workspace');
 
-  // Create demo client
   const client = await Client.create({
     workspace: workspaceId,
     name:      'Acme Technologies (Demo)',
@@ -128,7 +106,6 @@ const seedDemoWorkspace = async (userId, workspaceId) => {
     notes:     'This is demo data. You can delete it anytime.',
   });
 
-  // Create demo project
   const project = await Project.create({
     workspace:   workspaceId,
     client:      client._id,
@@ -141,7 +118,6 @@ const seedDemoWorkspace = async (userId, workspaceId) => {
     tags:        ['web', 'design', 'development'],
   });
 
-  // Create demo milestones
   const milestoneData = [
     {
       title:       'Discovery & Research',
@@ -175,19 +151,16 @@ const seedDemoWorkspace = async (userId, workspaceId) => {
     }))
   );
 
-  // Update project with milestone references
   await Project.findByIdAndUpdate(project._id, {
     milestones: milestones.map(m => m._id)
   });
 
-  // Get user for invoice number generation
   const {
     generateInvoiceNumber
   } = require('./invoice.service');
 
   const invoiceNumber = await generateInvoiceNumber(userId);
 
-  // Create demo invoice
   const invoice = await Invoice.create({
     workspace:     workspaceId,
     client:        client._id,
@@ -203,7 +176,6 @@ const seedDemoWorkspace = async (userId, workspaceId) => {
     notes: 'This is a demo invoice. Delete it before creating real invoices.',
   });
 
-  // Mark onboarding steps complete since demo data exists
   await markStepComplete(userId, 'add_client');
   await markStepComplete(userId, 'create_project');
 

@@ -13,15 +13,12 @@ export const invoicesApi = {
   update: (id, data) =>
     axiosClient.patch(`/invoices/${id}`, data),
 
-  // Generates PDF, creates Razorpay link, emails client, locks invoice
   send:   (id) =>
     axiosClient.post(`/invoices/${id}/send`),
 
-  // Generates/regenerates PDF for draft invoices
   generatePDF: (id) =>
     axiosClient.post(`/invoices/${id}/generate-pdf`),
 
-  // Serves PDF through your proxy endpoint with correct headers
   viewPDF: (id) =>
     `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'}/invoices/${id}/pdf`,
 

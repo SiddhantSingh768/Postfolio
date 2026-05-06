@@ -15,16 +15,12 @@ const sendOTPEmail = async (to, name, otp) => {
     });
     logger.info({ to }, "OTP email sent");
   } catch (err) {
-    // Log but don't rethrow — email failure shouldn't crash registration.
-    // The user can request a resend.
     logger.warn({ err: err.message, to }, "Failed to send OTP email");
   }
 };
 
 const sendPasswordResetEmail = async (to, name, resetToken) => {
   const resetUrl = `${process.env.CLIENT_URL}/reset-password?token=${resetToken}`;
-  // Password reset DOES rethrow — if the email fails, the caller
-  // must roll back the stored reset token or the user is locked out.
   await transporter.sendMail({
     from: `"Postfolio" <${process.env.SMTP_USER}>`,
     to,
@@ -61,7 +57,7 @@ const sendInvoiceEmail = async (
       { err: err.message, invoiceId: invoice._id },
       "Invoice email failed",
     );
-    throw err; // Rethrow so caller can handle
+    throw err;
   }
 };
 
@@ -87,7 +83,7 @@ const sendPaymentMismatchAlert = async (
   try {
     await transporter.sendMail({
       from: `"Postfolio Alert" <${process.env.SMTP_USER}>`,
-      to: process.env.SMTP_USER, // Alert goes to freelancer's own email
+      to: process.env.SMTP_USER,
       subject: `⚠️ Payment mismatch on Invoice ${invoice.invoiceNumber}`,
       html: paymentMismatchTemplate(invoice, paidAmount, expectedAmount),
     });
