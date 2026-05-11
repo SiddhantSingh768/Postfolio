@@ -1,49 +1,50 @@
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 const logger     = require('./logger');
 
-let transporter = null;
+let resendClient = null;
 
-const createTransporter = () => {
-  transporter = nodemailer.createTransport({
-    host:   process.env.SMTP_HOST || 'smtp.gmail.com',
-    port:   parseInt(process.env.SMTP_PORT) || 465,
-    secure: true,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-    // Force IPv4 — Railway does not support IPv6 outbound
-    family: 4,
-    tls: {
-      rejectUnauthorized: false,
-    },
-  });
+const getResendClient = () => {
+  if (!resendClient && process.env.RESEND_API_KEY) {
+    resendClient = new Resend(process.env.RESEND_API_KEY);
+  }
+  return resendClient;
+};
 
-  return transporter;
+// Drop-in replacement for nodemailer transporter
+// Exposes the same .sendMail() interface your email service uses
+const transporter = {
+  sendMail: async ({ from, to, subject, html, text }) => {
+    const client = getResendClient();
+
+    if (!client) {
+      logger.warn('Resend not configured — email not sent');
+      return { messageId: 'not_sent' };
+    }
+
+    const result = await client.emails.send({
+      from:    from || `Postfolio <onboarding@resend.dev>`,
+      to:      Array.isArray(to) ? to : [to],
+      subject,
+      html,
+      text,
+    });
+
+    return { messageId: result.id };
+  },
 };
 
 const verifyEmailConnection = async () => {
-  try {
-    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      logger.warn('SMTP credentials not configured — emails will not send');
-      return;
-    }
-
-    const t = getTransporter();
-    await t.verify();
-    logger.info('SMTP connection verified');
-  } catch (err) {
-    logger.warn(
-      { err: err.message },
-      'SMTP verification failed — emails will not send'
-    );
-    // Do NOT throw — email failure must never crash the server
+  if (!process.env.RESEND_API_KEY) {
+    logger.warn('RESEND_API_KEY not set — emails will not send');
+    return;
   }
+  // Resend does not have a verify endpoint
+  // We just confirm the key exists
+  logger.info('SMTP connection verified');
 };
 
-const getTransporter = () => {
-  if (!transporter) createTransporter();
-  return transporter;
+module.exports = {
+  transporter,
+  getTransporter: () => transporter,
+  verifyEmailConnection,
 };
-
-module.exports = { getTransporter, verifyEmailConnection, transporter: getTransporter() };

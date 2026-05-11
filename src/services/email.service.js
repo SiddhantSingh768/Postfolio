@@ -8,7 +8,7 @@ const logger = require("../config/logger");
 const sendOTPEmail = async (to, name, otp) => {
   try {
     await transporter.sendMail({
-      from: `"Postfolio" <${process.env.SMTP_USER}>`,
+      from: `Postfolio <onboarding@resend.dev>`,
       to,
       subject: "Verify your Postfolio account",
       html: otpEmailTemplate(name, otp),
@@ -22,7 +22,7 @@ const sendOTPEmail = async (to, name, otp) => {
 const sendPasswordResetEmail = async (to, name, resetToken) => {
   const resetUrl = `${process.env.CLIENT_URL}/reset-password?token=${resetToken}`;
   await transporter.sendMail({
-    from: `"Postfolio" <${process.env.SMTP_USER}>`,
+    from: `Postfolio <onboarding@resend.dev>`,
     to,
     subject: "Reset your Postfolio password",
     html: passwordResetTemplate(name, resetUrl),
@@ -43,7 +43,7 @@ const sendInvoiceEmail = async (
 ) => {
   try {
     await transporter.sendMail({
-      from: `"${freelancer.name} via Postfolio" <${process.env.SMTP_USER}>`,
+      from: `Postfolio <onboarding@resend.dev>`,
       to: client.email,
       subject: `Invoice ${invoice.invoiceNumber} from ${freelancer.name} — ₹${invoice.grandTotal.toLocaleString("en-IN")}`,
       html: invoiceEmailTemplate(invoice, freelancer, client, paymentLinkUrl),
@@ -64,7 +64,7 @@ const sendInvoiceEmail = async (
 const sendPaymentConfirmationEmail = async (invoice, client) => {
   try {
     await transporter.sendMail({
-      from: `"Postfolio" <${process.env.SMTP_USER}>`,
+      from: `Postfolio <onboarding@resend.dev>`,
       to: client.email,
       subject: `Payment received — Invoice ${invoice.invoiceNumber}`,
       html: paymentConfirmationTemplate(invoice, client),
@@ -82,7 +82,7 @@ const sendPaymentMismatchAlert = async (
 ) => {
   try {
     await transporter.sendMail({
-      from: `"Postfolio Alert" <${process.env.SMTP_USER}>`,
+      from: `Postfolio <onboarding@resend.dev>`,
       to: process.env.SMTP_USER,
       subject: `⚠️ Payment mismatch on Invoice ${invoice.invoiceNumber}`,
       html: paymentMismatchTemplate(invoice, paidAmount, expectedAmount),
