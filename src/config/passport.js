@@ -1,48 +1,90 @@
-const passport       = require('passport');
+const passport      = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
-const User           = require('../models/user.model');
-const { createSoloWorkspace } = require('../services/workspace.service');
-const logger = require('./logger');
+const User          = require('../models/user.model');
+const Workspace     = require('../models/workspace.model');
+const logger        = require('./logger');
 
-passport.use(new GoogleStrategy(
-  {
-    clientID:     process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL:  '/api/v1/auth/google/callback'
-  },
-  async (accessToken, refreshToken, profile, done) => {
-    try {
-      let user = await User.findOne({ oauthProvider: 'google', oauthId: profile.id });
-      if (user) return done(null, user);
+// Only register Google strategy if credentials are configured.
+// Without this guard, the server crashes on startup if
+// GOOGLE_CLIENT_ID is missing from environment variables.
 
-      user = await User.findOne({ email: profile.emails[0].value });
-      if (user) {
-        user.oauthProvider = 'google';
-        user.oauthId       = profile.id;
-        if (!user.avatarUrl) user.avatarUrl = profile.photos?.[0]?.value || null;
-        await user.save();
-        return done(null, user);
+if (
+  process.env.GOOGLE_CLIENT_ID &&
+  process.env.GOOGLE_CLIENT_SECRET &&
+  process.env.GOOGLE_CALLBACK_URL
+) {
+  passport.use(
+    new GoogleStrategy(
+      {
+        clientID:     process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        callbackURL:  process.env.GOOGLE_CALLBACK_URL,
+      },
+      async (accessToken, refreshToken, profile, done) => {
+        try {
+          const email = profile.emails?.[0]?.value;
+          if (!email) {
+            return done(new Error('No email returned from Google'), null);
+          }
+
+          // Check if user already exists
+          let user = await User.findOne({ email });
+
+          if (user) {
+            // Update OAuth fields if logging in with Google for first time
+            if (!user.oauthProvider) {
+              user.oauthProvider = 'google';
+              user.oauthId       = profile.id;
+              user.isEmailVerified = true;
+              await user.save();
+            }
+            return done(null, user);
+          }
+
+          // Create new user from Google profile
+          user = await User.create({
+            name:            profile.displayName || email.split('@')[0],
+            email,
+            oauthProvider:   'google',
+            oauthId:         profile.id,
+            isEmailVerified: true,
+            // No password — OAuth users don't need one
+          });
+
+          // Create workspace for new user
+          const workspace = await Workspace.create({
+            name:  `${user.name}'s Workspace`,
+            owner: user._id,
+            plan:  'solo',
+          });
+
+          user.defaultWorkspace = workspace._id;
+          await user.save();
+
+          logger.info({ userId: user._id }, 'New user created via Google OAuth');
+          return done(null, user);
+
+        } catch (err) {
+          logger.error({ err: err.message }, 'Google OAuth strategy error');
+          return done(err, null);
+        }
       }
+    )
+  );
 
-      user = await User.create({
-        name:            profile.displayName,
-        email:           profile.emails[0].value,
-        isEmailVerified: true,  // Google already verified the email
-        oauthProvider:   'google',
-        oauthId:         profile.id,
-        avatarUrl:       profile.photos?.[0]?.value || null
-      });
+  logger.info('Google OAuth strategy registered');
+} else {
+  logger.warn('Google OAuth not configured — GOOGLE_CLIENT_ID missing. Google login disabled.');
+}
 
-      const workspace       = await createSoloWorkspace(user._id, user.name);
-      user.defaultWorkspace = workspace._id;
-      await user.save();
-
-      logger.info({ userId: user._id }, 'New user via Google OAuth');
-      return done(null, user);
-    } catch (err) {
-      return done(err, null);
-    }
+passport.serializeUser((user, done) => done(null, user._id));
+passport.deserializeUser(async (id, done) => {
+  try {
+    const user = await User.findById(id);
+    done(null, user);
+  } catch (err) {
+    done(err, null);
   }
-));
+});
 
 module.exports = passport;
