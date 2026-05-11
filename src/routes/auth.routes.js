@@ -61,7 +61,6 @@ const COOKIE_OPTIONS = {
   maxAge:   7 * 24 * 60 * 60 * 1000
 };
 
-// Wrap Google routes in a check
 const googleEnabled = !!(
   process.env.GOOGLE_CLIENT_ID &&
   process.env.GOOGLE_CLIENT_SECRET
@@ -69,9 +68,11 @@ const googleEnabled = !!(
 
 if (googleEnabled) {
   router.get('/google',
-    passport.authenticate('google', { scope: ['profile', 'email'] })
+    passport.authenticate('google', {
+      scope:   ['profile', 'email'],
+      session: false,
+    })
   );
-
   router.get('/google/callback',
     passport.authenticate('google', {
       session:      false,

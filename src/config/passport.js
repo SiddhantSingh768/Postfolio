@@ -4,10 +4,6 @@ const User          = require('../models/user.model');
 const Workspace     = require('../models/workspace.model');
 const logger        = require('./logger');
 
-// Only register Google strategy if credentials are configured.
-// Without this guard, the server crashes on startup if
-// GOOGLE_CLIENT_ID is missing from environment variables.
-
 if (
   process.env.GOOGLE_CLIENT_ID &&
   process.env.GOOGLE_CLIENT_SECRET &&
