@@ -61,31 +61,62 @@ const COOKIE_OPTIONS = {
   maxAge:   7 * 24 * 60 * 60 * 1000
 };
 
-router.get('/google',
-  passport.authenticate('google', { scope: ['profile', 'email'], session: false })
+// Wrap Google routes in a check
+const googleEnabled = !!(
+  process.env.GOOGLE_CLIENT_ID &&
+  process.env.GOOGLE_CLIENT_SECRET
 );
 
-router.get('/google/callback',
-  passport.authenticate('google', { session: false, failureRedirect: `${process.env.CLIENT_URL}/login?error=oauth_failed` }),
-  async (req, res) => {
-    try {
-      const user         = req.user;
-      const accessToken  = generateAccessToken(user._id, user.defaultWorkspace, user.role);
-      const refreshToken = generateRefreshToken(user._id);
+if (googleEnabled) {
+  router.get('/google',
+    passport.authenticate('google', { scope: ['profile', 'email'] })
+  );
 
-      await RefreshToken.create({
-        token:     refreshToken,
-        user:      user._id,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-      });
+  router.get('/google/callback',
+    passport.authenticate('google', {
+      session:      false,
+      failureRedirect: `${process.env.CLIENT_URL}/login?error=oauth_failed`,
+    }),
+    async (req, res) => {
+      try {
+        const { generateAccessToken, generateRefreshToken } = require('../utils/tokenUtils');
 
-      res.cookie('refreshToken', refreshToken, COOKIE_OPTIONS);
-      res.redirect(`${process.env.CLIENT_URL}/auth/callback?token=${accessToken}`);
-    } catch (err) {
-      res.redirect(`${process.env.CLIENT_URL}/login?error=oauth_failed`);
+        const accessToken  = generateAccessToken(req.user);
+        const refreshToken = generateRefreshToken(req.user);
+
+        // Store refresh token
+        const RefreshToken = require('../models/refreshToken.model');
+        await RefreshToken.create({
+          token:     refreshToken,
+          userId:    req.user._id,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        });
+
+        // Set refresh token cookie
+        res.cookie('refreshToken', refreshToken, {
+          httpOnly: true,
+          secure:   process.env.NODE_ENV === 'production',
+          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+          maxAge:   7 * 24 * 60 * 60 * 1000,
+        });
+
+        // Redirect to frontend with access token in URL
+        res.redirect(`${process.env.CLIENT_URL}/login?token=${accessToken}`);
+      } catch (err) {
+        res.redirect(`${process.env.CLIENT_URL}/login?error=oauth_failed`);
+      }
     }
-  }
-);
+  );
+} else {
+  // Return a helpful error if Google OAuth is not configured
+  router.get('/google', (req, res) => {
+    res.status(503).json({
+      status:  'error',
+      code:    'GOOGLE_OAUTH_NOT_CONFIGURED',
+      message: 'Google OAuth is not configured on this server'
+    });
+  });
+}
 
 
 
